@@ -229,6 +229,32 @@ describe('POST /api/import/folder', () => {
     });
   });
 
+  it('imports a loose Claude Design HTML file through the zip route', async () => {
+    const html = await readFile(new URL('./fixtures/claude-design-home.dc.html', import.meta.url));
+    const form = new FormData();
+    form.append('file', new Blob([html]), 'home.dc.html');
+
+    const resp = await fetch(`${baseUrl}/api/import/claude-design`, {
+      method: 'POST',
+      body: form,
+    });
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as {
+      project: { id: string };
+      entryFile: string;
+      entryKind: string;
+    };
+    expect(body.entryFile).toBe('home.dc.html');
+    expect(body.entryKind).toBe('design-canvas');
+
+    const raw = await fetch(`${baseUrl}/api/projects/${body.project.id}/raw/home.dc.html`);
+    expect(raw.status).toBe(200);
+    const written = await raw.text();
+    expect(written).not.toContain('__OM_EVT__');
+    expect(written).not.toContain('_omeo');
+    expect(written).not.toContain('srcmap');
+  });
+
   it('rejects folder imports in sandbox mode', async () => {
     await withSandboxMode(async () => {
       const folder = makeFolder();

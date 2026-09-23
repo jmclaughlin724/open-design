@@ -1,6 +1,12 @@
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { inflateRawSync } from 'node:zlib';
+import {
+  absorbedKindPreviewTransport,
+  type AbsorbedFileKind,
+} from '@open-design/contracts/api/absorbed-files';
 import { validateProjectPath } from '../projects.js';
 
 const EOCD_SIG = 0x06054b50;
@@ -10,6 +16,64 @@ const LOCAL_SIG = 0x04034b50;
 const MAX_FILES = 5000;
 const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+export const CLAUDE_DESIGN_IMPORT_LIMITS = {
+  maxFiles: MAX_FILES,
+  maxTotalBytes: MAX_TOTAL_BYTES,
+  maxFileBytes: MAX_FILE_BYTES,
+} as const;
+
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(MODULE_DIR, '../../../..');
+
+/**
+ * Candidate vendored sandbox runtimes. A URL is rewritten only when the
+ * matching file already exists. These public paths are not in the repo
+ * today (the web sandbox still points at CDN URLs in
+ * apps/web/src/runtime/react-component.ts), so discovery returns nothing
+ * rather than inventing a runtime.
+ */
+const VENDORED_SANDBOX_RUNTIME_CANDIDATES = [
+  {
+    key: 'tailwind',
+    repoPath: 'apps/web/public/vendor/tailwind.js',
+    urlPath: '/vendor/tailwind.js',
+  },
+  {
+    key: 'babel',
+    repoPath: 'apps/web/public/vendor/babel.min.js',
+    urlPath: '/vendor/babel.min.js',
+  },
+  {
+    key: 'react',
+    repoPath: 'apps/web/public/vendor/react.development.js',
+    urlPath: '/vendor/react.development.js',
+  },
+  {
+    key: 'reactDom',
+    repoPath: 'apps/web/public/vendor/react-dom.development.js',
+    urlPath: '/vendor/react-dom.development.js',
+  },
+] as const;
+
+export type VendoredSandboxRuntimePaths = {
+  tailwind?: string;
+  babel?: string;
+  react?: string;
+  reactDom?: string;
+};
+
+export type ClaudeDesignImportOptions = {
+  runtimePaths?: VendoredSandboxRuntimePaths;
+};
+
+export type ClaudeDesignImportResult = {
+  entryFile: string;
+  files: string[];
+  kinds: Record<string, AbsorbedFileKind>;
+  entryKind: AbsorbedFileKind;
+  previewTransport: 'srcdoc' | 'url';
+};
 
 type ZipEntry = {
   name: string;
@@ -22,7 +86,25 @@ type ZipEntry = {
 
 type ImportedFile = { path: string; body: Buffer };
 
-export async function importClaudeDesignZip(zipPath: string, projectDir: string) {
+type LooseImportFile = { path: string; body: Buffer };
+
+export function discoverVendoredSandboxRuntimePaths(
+  repoRoot = REPO_ROOT,
+): VendoredSandboxRuntimePaths {
+  const paths: VendoredSandboxRuntimePaths = {};
+  for (const candidate of VENDORED_SANDBOX_RUNTIME_CANDIDATES) {
+    if (!existsSync(path.join(repoRoot, candidate.repoPath))) continue;
+    paths[candidate.key] = candidate.urlPath;
+  }
+  return paths;
+}
+
+export async function importClaudeDesignZip(
+  zipPath: string,
+  projectDir: string,
+  options?: ClaudeDesignImportOptions,
+) {
+  const runtimePaths = options?.runtimePaths ?? discoverVendoredSandboxRuntimePaths();
   const zip = await readFile(zipPath);
   const entries = readCentralDirectory(zip);
   const files: ImportedFile[] = [];
@@ -50,38 +132,158 @@ export async function importClaudeDesignZip(zipPath: string, projectDir: string)
     totalBytes += body.length;
     if (totalBytes > MAX_TOTAL_BYTES) throw new Error('zip is too large');
 
-    files.push({ path: relPath, body: normalizeImportedClaudeDesignFile(relPath, body) });
+    files.push({ path: relPath, body: normalizeImportedClaudeDesignFile(relPath, body, runtimePaths) });
   }
 
   if (files.length === 0) throw new Error('zip contains no files');
-  const entryFile = chooseEntryFile(files.map((f) => f.path));
-  if (!entryFile) throw new Error('zip does not contain an HTML file');
-
-  const dirCreates = new Map<string, Promise<string | undefined>>();
-  const ensureDir = (dir: string) => {
-    let pending = dirCreates.get(dir);
-    if (!pending) {
-      pending = mkdir(dir, { recursive: true });
-      dirCreates.set(dir, pending);
-    }
-    return pending;
-  };
-
-  await mkdir(projectDir, { recursive: true });
-  await Promise.all(files.map(async (f) => {
-    const target = safeJoin(projectDir, f.path);
-    await ensureDir(path.dirname(target));
-    await writeFile(target, f.body);
-  }));
-
-  return {
-    entryFile,
-    files: files.map((f) => f.path),
-  };
+  assertUniqueImportPaths(files);
+  const result = finishImport(files, 'zip does not contain an HTML file');
+  await writeImportedFiles(projectDir, files);
+  return result;
 }
 
-function normalizeImportedClaudeDesignFile(relPath: string, body: Buffer): Buffer {
-  if (path.basename(relPath) !== 'design-canvas.jsx') return body;
+export async function importClaudeDesignFiles(
+  inputs: LooseImportFile[],
+  projectDir: string,
+  options?: ClaudeDesignImportOptions,
+): Promise<ClaudeDesignImportResult> {
+  const runtimePaths = options?.runtimePaths ?? discoverVendoredSandboxRuntimePaths();
+  if (inputs.length === 0) throw new Error('import contains no files');
+  if (inputs.length > MAX_FILES) throw new Error('import contains too many files');
+
+  const files: ImportedFile[] = [];
+  let totalBytes = 0;
+  for (const input of inputs) {
+    const relPath = sanitizeZipPath(input.path);
+    if (input.body.length > MAX_FILE_BYTES) {
+      throw new Error(`import file too large: ${relPath}`);
+    }
+    totalBytes += input.body.length;
+    if (totalBytes > MAX_TOTAL_BYTES) throw new Error('import is too large');
+    files.push({
+      path: relPath,
+      body: normalizeImportedClaudeDesignFile(relPath, input.body, runtimePaths),
+    });
+  }
+
+  assertUniqueImportPaths(files);
+  const result = finishImport(files, 'import does not contain an HTML file');
+  await writeImportedFiles(projectDir, files);
+  return result;
+}
+
+/**
+ * Classify an absorbed file. Design-canvas wins over deck, deck over
+ * prototype, prototype over generic HTML. Non-HTML assets return null.
+ *
+ * Deck detection reuses the product's file-typing heuristic (path contains
+ * deck/slides/pitch, the inferLegacyManifest analog) plus the structured
+ * markup sniff from sourceLooksLikeStructuredDeck (`<deck-stage>`,
+ * deck-slide/ppt-slide, `.deck > .slide`).
+ */
+export function classifyAbsorbedFile(
+  relPath: string,
+  source?: string,
+): AbsorbedFileKind | null {
+  const normalized = relPath.replace(/\\/g, '/');
+  const base = path.posix.basename(normalized);
+  const html = /\.html?$/i.test(normalized);
+  const canvasFile = /\.dc\.html?$/i.test(base) || base.toLowerCase() === 'design-canvas.jsx';
+  if (!html && !canvasFile) return null;
+
+  const text = source ?? '';
+  const markup = markupWithoutHostNoise(text);
+  if (
+    canvasFile
+    || /design-canvas\.jsx/i.test(text)
+    || /\bclass\s*=\s*['"][^'"]*\bdesign-canvas\b/i.test(markup)
+  ) {
+    return 'design-canvas';
+  }
+  if (html && looksLikeDeck(normalized, markup)) return 'deck';
+  if (html && looksLikePrototype(normalized, text)) return 'prototype';
+  if (html) return 'html';
+  return null;
+}
+
+const KIND_RANK: Record<AbsorbedFileKind, number> = {
+  'design-canvas': 3,
+  deck: 2,
+  prototype: 1,
+  html: 0,
+};
+
+export function chooseAbsorbedEntryFile(
+  files: Array<{ path: string; source?: string }>,
+): string | null {
+  const html = files.filter((file) => /\.html?$/i.test(file.path));
+  if (html.length === 0) return null;
+  const ranked = [...html].sort((a, b) => {
+    const aKind = classifyAbsorbedFile(a.path, a.source) ?? 'html';
+    const bKind = classifyAbsorbedFile(b.path, b.source) ?? 'html';
+    const rank = kindRank(bKind) - kindRank(aKind);
+    if (rank !== 0) return rank;
+    const aCanvasName = /\.dc\.html?$/i.test(a.path) ? 0 : 1;
+    const bCanvasName = /\.dc\.html?$/i.test(b.path) ? 0 : 1;
+    if (aCanvasName !== bCanvasName) return aCanvasName - bCanvasName;
+    const aRootIndex = !a.path.includes('/') && path.posix.basename(a.path).toLowerCase() === 'index.html' ? 0 : 1;
+    const bRootIndex = !b.path.includes('/') && path.posix.basename(b.path).toLowerCase() === 'index.html' ? 0 : 1;
+    if (aRootIndex !== bRootIndex) return aRootIndex - bRootIndex;
+    const aRoot = a.path.includes('/') ? 1 : 0;
+    const bRoot = b.path.includes('/') ? 1 : 0;
+    if (aRoot !== bRoot) return aRoot - bRoot;
+    return a.path.localeCompare(b.path);
+  });
+  return ranked[0]?.path ?? null;
+}
+
+export function stripClaudeDesignHostRemnants(source: string): string {
+  const withoutBridge = source.replace(
+    /<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,
+    (block) => (block.includes('__OM_EVT__') ? '' : block),
+  );
+  const withoutLines = withoutBridge.includes('__OM_EVT__')
+    ? withoutBridge
+      .split('\n')
+      .filter((line) => !line.includes('__OM_EVT__'))
+      .join('\n')
+    : withoutBridge;
+  return stripHostIntegrationQueryParams(withoutLines);
+}
+
+/**
+ * Rewrite Tailwind Play CDN, Babel standalone, and React UMD `<script src>`
+ * URLs to caller-supplied local paths. Missing keys are left on the CDN so
+ * this never invents a runtime the preview cannot load. Integrity attributes
+ * are dropped on rewritten tags; they would reject a local file.
+ */
+export function rewriteVendoredSandboxRuntimeUrls(
+  source: string,
+  paths: VendoredSandboxRuntimePaths,
+): string {
+  if (!paths.tailwind && !paths.babel && !paths.react && !paths.reactDom) return source;
+  return source.replace(/<script\b[^>]*>/gi, (tag) => rewriteScriptTag(tag, paths));
+}
+
+function normalizeImportedClaudeDesignFile(
+  relPath: string,
+  body: Buffer,
+  runtimePaths: VendoredSandboxRuntimePaths,
+): Buffer {
+  let next = body;
+  if (path.basename(relPath) === 'design-canvas.jsx') {
+    next = normalizeDesignCanvasWheelFile(next);
+  }
+  if (!isTextImport(relPath)) return next;
+  const source = next.toString('utf8');
+  const normalized = absolutizeProjectAssetRefs(
+    rewriteVendoredSandboxRuntimeUrls(stripClaudeDesignHostRemnants(source), runtimePaths),
+    relPath,
+  );
+  return normalized === source ? next : Buffer.from(normalized, 'utf8');
+}
+
+function normalizeDesignCanvasWheelFile(body: Buffer): Buffer {
   const source = body.toString('utf8');
   const { result, wheelMatched, gestureMatched } = normalizeDesignCanvasWheelHandling(source);
   // Warn whenever any rewrite regex missed. Either one drifting silently
@@ -261,16 +463,162 @@ function sanitizeZipPath(name: string): string {
   return validateProjectPath(name);
 }
 
-function chooseEntryFile(paths: string[]): string | null {
-  const html = paths.filter((p) => /\.html?$/i.test(p));
-  if (html.length === 0) return null;
-  const lower = new Map(html.map((p) => [p.toLowerCase(), p]));
+function isTextImport(relPath: string): boolean {
+  return /\.(html?|jsx?|mjs|cjs|css)$/i.test(relPath);
+}
+
+function markupWithoutHostNoise(source: string): string {
+  return source
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '');
+}
+
+function looksLikeDeck(relPath: string, markup: string): boolean {
+  const lower = relPath.toLowerCase();
+  if (lower.includes('deck') || lower.includes('slides') || lower.includes('pitch')) return true;
   return (
-    lower.get('index.html') ??
-    html.find((p) => !p.includes('/')) ??
-    html[0] ??
-    null
+    /<deck-stage[\s/>]/i.test(markup)
+    || /class\s*=\s*['"](?:[^'"]*\s)?(?:deck-slide|ppt-slide)(?:\s|['"])/i.test(markup)
+    || /<[^>]*\bclass\s*=\s*['"](?:[^'"]*\s)?slide(?:\s|['"])[^>]*\bdata-title\s*=|<[^>]*\bdata-title\s*=[^>]*\bclass\s*=\s*['"](?:[^'"]*\s)?slide(?:\s|['"])/i.test(markup)
+    || /<[^>]*\bclass\s*=\s*['"](?:[^'"]*\s)?deck(?:\s|['"])[^>]*>\s*<[^>]*\bclass\s*=\s*['"](?:[^'"]*\s)?slide(?:\s|['"])/i.test(markup)
   );
+}
+
+function looksLikePrototype(relPath: string, source: string): boolean {
+  if (relPath.toLowerCase().includes('prototype')) return true;
+  if (/\btype\s*=\s*['"]?text\/babel\b/i.test(source)) return true;
+  if (/<script\b[^>]*\bsrc\s*=\s*['"][^'"]+\.jsx(?:[?#][^'"]*)?['"]/i.test(source)) return true;
+  return /\/react(?:-dom)?(?:@[^/"']+)?\/umd\/react(?:-dom)?\./i.test(source);
+}
+
+const HOST_QUERY_KEY = /^(?:_omeo|srcmap)$/i;
+
+function stripHostIntegrationQueryParams(source: string): string {
+  return source.replace(
+    /[^\s"'<>()]*\?([^\s"'<>()]*)/g,
+    (token, query: string) => {
+      if (!/(?:^|[&])(?:_omeo|srcmap)=/i.test(query)) return token;
+      const queryIndex = token.indexOf('?');
+      const hashIndex = token.indexOf('#', queryIndex);
+      const base = token.slice(0, queryIndex);
+      const queryPart = hashIndex < 0 ? token.slice(queryIndex + 1) : token.slice(queryIndex + 1, hashIndex);
+      const fragment = hashIndex < 0 ? '' : token.slice(hashIndex);
+      const kept = queryPart.split('&').filter((part) => {
+        const key = decodeURIComponent((part.split('=')[0] ?? '').replace(/\+/g, ' '));
+        return !HOST_QUERY_KEY.test(key);
+      });
+      return kept.length > 0 ? `${base}?${kept.join('&')}${fragment}` : `${base}${fragment}`;
+    },
+  );
+}
+
+function vendoredRuntimeUrl(url: string, paths: VendoredSandboxRuntimePaths): string {
+  const bare = url.split('#')[0] ?? url;
+  if (paths.reactDom && /(?:^|\/\/)(?:unpkg\.com|cdn\.jsdelivr\.net)\/(?:npm\/)?react-dom(?:@[^/"']+)?\/umd\/react-dom(?:\.development|\.production\.min)?\.js(?:\?|$)/i.test(bare)) {
+    return paths.reactDom;
+  }
+  if (paths.react && /(?:^|\/\/)(?:unpkg\.com|cdn\.jsdelivr\.net)\/(?:npm\/)?react(?:@[^/"']+)?\/umd\/react(?:\.development|\.production\.min)?\.js(?:\?|$)/i.test(bare)) {
+    return paths.react;
+  }
+  if (paths.babel && /(?:^|\/\/)(?:unpkg\.com|cdn\.jsdelivr\.net)\/(?:npm\/)?@babel\/standalone(?:@[^/"']+)?\/babel(?:\.min)?\.js(?:\?|$)/i.test(bare)) {
+    return paths.babel;
+  }
+  if (paths.tailwind && /(?:^|\/\/)cdn\.tailwindcss\.com(?:[/?#]|$)/i.test(bare)) {
+    return paths.tailwind;
+  }
+  return url;
+}
+
+function rewriteScriptTag(tag: string, paths: VendoredSandboxRuntimePaths): string {
+  const srcMatch = /\bsrc\s*=\s*(['"])([^'"]+)\1/i.exec(tag);
+  if (!srcMatch?.[1] || !srcMatch[2]) return tag;
+  const next = vendoredRuntimeUrl(srcMatch[2], paths);
+  if (next === srcMatch[2]) return tag;
+  const quote = srcMatch[1];
+  let rewritten = tag.replace(srcMatch[0], `src=${quote}${next}${quote}`);
+  rewritten = rewritten.replace(/\s+integrity\s*=\s*(['"])[^'"]*\1/gi, '');
+  rewritten = rewritten.replace(/\s+crossorigin\s*=\s*(['"])[^'"]*\1/gi, '');
+  rewritten = rewritten.replace(/\s+crossorigin(?=[\s/>])/gi, '');
+  return rewritten;
+}
+
+function absolutizeProjectAssetRefs(source: string, relPath: string): string {
+  const depth = relPath.split('/').filter(Boolean).length - 1;
+  const prefix = depth > 0 ? '../'.repeat(depth) : '';
+  const rewrite = (url: string): string => {
+    const match = /^(?:\.\/)?(assets\/.*)$/i.exec(url);
+    const assetPath = match?.[1];
+    if (!assetPath) return url;
+    return depth > 0 ? `${prefix}${assetPath}` : assetPath;
+  };
+  const withAttrs = source.replace(
+    /(\b(?:src|href)\s*=\s*)(['"])([^'"]+)\2/gi,
+    (full, lead: string, quote: string, url: string) => {
+      const next = rewrite(url);
+      return next === url ? full : `${lead}${quote}${next}${quote}`;
+    },
+  );
+  return withAttrs.replace(
+    /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi,
+    (full, quote: string, url: string) => {
+      const trimmed = url.trim();
+      const next = rewrite(trimmed);
+      return next === trimmed ? full : `url(${quote}${next}${quote})`;
+    },
+  );
+}
+
+function assertUniqueImportPaths(files: ImportedFile[]): void {
+  const seen = new Set<string>();
+  for (const file of files) {
+    if (seen.has(file.path)) throw new Error(`duplicate import path: ${file.path}`);
+    seen.add(file.path);
+  }
+}
+
+function kindRank(kind: AbsorbedFileKind): number {
+  return KIND_RANK[kind] ?? 0;
+}
+
+function finishImport(files: ImportedFile[], emptyHtmlMessage: string): ClaudeDesignImportResult {
+  const described = files.map((file) => {
+    const source = isTextImport(file.path) ? file.body.toString('utf8') : undefined;
+    return source === undefined ? { path: file.path } : { path: file.path, source };
+  });
+  const entryFile = chooseAbsorbedEntryFile(described);
+  if (!entryFile) throw new Error(emptyHtmlMessage);
+  const kinds: Record<string, AbsorbedFileKind> = {};
+  for (const file of described) {
+    const kind = classifyAbsorbedFile(file.path, file.source);
+    if (kind) kinds[file.path] = kind;
+  }
+  const entryKind = kinds[entryFile] ?? 'html';
+  return {
+    entryFile,
+    files: files.map((file) => file.path),
+    kinds,
+    entryKind,
+    previewTransport: absorbedKindPreviewTransport(entryKind),
+  };
+}
+
+async function writeImportedFiles(projectDir: string, files: ImportedFile[]): Promise<void> {
+  const dirCreates = new Map<string, Promise<string | undefined>>();
+  const ensureDir = (dir: string) => {
+    let pending = dirCreates.get(dir);
+    if (!pending) {
+      pending = mkdir(dir, { recursive: true });
+      dirCreates.set(dir, pending);
+    }
+    return pending;
+  };
+
+  await mkdir(projectDir, { recursive: true });
+  await Promise.all(files.map(async (file) => {
+    const target = safeJoin(projectDir, file.path);
+    await ensureDir(path.dirname(target));
+    await writeFile(target, file.body);
+  }));
 }
 
 function safeJoin(root: string, relPath: string): string {

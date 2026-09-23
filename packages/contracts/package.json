@@ -34,6 +34,10 @@
       "types": "./dist/api/handoff.d.ts",
       "default": "./dist/api/handoff.mjs"
     },
+    "./api/absorbed-files": {
+      "types": "./dist/api/absorbed-files.d.ts",
+      "default": "./dist/api/absorbed-files.mjs"
+    },
     "./api/providerModels": {
       "types": "./dist/api/providerModels.d.ts",
       "default": "./dist/api/providerModels.mjs"
