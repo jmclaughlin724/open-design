@@ -8,6 +8,7 @@ import {
   type ResolvedDesignSystemManifest,
   type ResolvedDesignSystemToken,
 } from '@open-design/contracts';
+import { bundledShadowDir } from './usage-notes.js';
 
 const PACKAGE_FILES = {
   design: 'DESIGN.md',
@@ -61,14 +62,17 @@ type PackageSnapshot = {
 
 /**
  * Locate the package directory for a project's selected design system.
- * `user:` ids resolve under the user root; other ids prefer the built-in
- * catalog and fall back to a same-id user package. A directory counts only
- * when `DESIGN.md` is a file.
+ * `user:` ids resolve under the user root. Other ids prefer a same-id user
+ * shadow created by the first notes write, then the built-in catalog, then a
+ * same-id user package that is not a shadow. A directory counts only when
+ * `DESIGN.md` is a file.
  */
 export async function resolveSelectedDesignSystemPackageDir(
   designSystemId: string,
   roots: DesignSystemPackageRoots,
 ): Promise<string | null> {
+  const shadow = await bundledShadowDir(designSystemId, roots);
+  if (shadow && await isDesignPackage(shadow)) return shadow;
   for (const packageDir of packageDirCandidates(designSystemId, roots)) {
     if (await isDesignPackage(packageDir)) return packageDir;
   }
