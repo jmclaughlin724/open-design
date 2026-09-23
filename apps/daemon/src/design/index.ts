@@ -3,7 +3,7 @@
  *
  * Barrel for daemon design lifecycle modules: finalize-design (finalize an
  * agent design run), handoff-design (synthesize a handoff prompt), and
- * claude-design-import (import a Claude design zip).
+ * claude-design-import (import a Claude Design zip or loose HTML files).
  */
 export * from './finalize-design.js';
 export * from './handoff-design.js';

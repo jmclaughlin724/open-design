@@ -38,6 +38,11 @@ import {
   type BuildDeckRenderInputOptions,
 } from './deck-export.js';
 import { readProjectFileVersion } from './project-file-versions.js';
+import { resolveProjectDir } from './projects.js';
+import {
+  importClaudeDesignFiles,
+  type ClaudeDesignImportResult,
+} from './design/claude-design-import.js';
 import { authorizeReasoningEgress, sendReasoningEgressDenial } from './reasoning-egress.js';
 import { sandboxImportedProjectRootUnavailableReason } from './sandbox-mode.js';
 import { parseOrchestratorWorkspace } from './workspace-contract.js';
@@ -52,6 +57,92 @@ import type { BoundWorkspaceResourceMutationGate } from './collab/workspace-reso
 export interface RegisterImportRoutesDeps extends RouteDeps<'db' | 'http' | 'uploads' | 'node' | 'ids' | 'paths' | 'imports' | 'auth' | 'projectStore' | 'conversations' | 'projectFiles' | 'validation'> {
   fetchProjectCreationWorkspaceDirectory?: () => Promise<WorkspaceDirectoryFetchResult>;
   enforceWorkspaceProjectMutation?: BoundWorkspaceResourceMutationGate;
+}
+
+type ClaudeDesignUpload = {
+  fieldname: string;
+  originalName: string;
+  tempPath: string;
+};
+
+function collectClaudeDesignUploads(req: {
+  file?: { fieldname?: string; originalname?: string; path?: string } | undefined;
+  files?: unknown;
+}): ClaudeDesignUpload[] {
+  const list: Array<{ fieldname?: string; originalname?: string; path?: string }> = [];
+  if (req.file?.path) list.push(req.file);
+  const raw = req.files;
+  if (Array.isArray(raw)) {
+    for (const file of raw) {
+      if (file && typeof file === 'object') list.push(file as { fieldname?: string; originalname?: string; path?: string });
+    }
+  } else if (raw && typeof raw === 'object') {
+    for (const group of Object.values(raw as Record<string, unknown>)) {
+      if (!Array.isArray(group)) continue;
+      for (const file of group) {
+        if (file && typeof file === 'object') {
+          list.push(file as { fieldname?: string; originalname?: string; path?: string });
+        }
+      }
+    }
+  }
+  const uploads: ClaudeDesignUpload[] = [];
+  for (const file of list) {
+    if (!file.path) continue;
+    const fieldname = file.fieldname || 'file';
+    if (fieldname !== 'file' && fieldname !== 'files') continue;
+    uploads.push({
+      fieldname,
+      originalName: file.originalname || 'upload',
+      tempPath: file.path,
+    });
+  }
+  return uploads;
+}
+
+function looseFilesFromJson(body: unknown): Array<{ path: string; body: Buffer }> | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  if (!Object.prototype.hasOwnProperty.call(body, 'files')) return null;
+  const files = (body as { files?: unknown }).files;
+  if (!Array.isArray(files)) throw new Error('files must be an array');
+  return files.map((file) => {
+    if (!file || typeof file !== 'object') throw new Error('invalid import file');
+    const record = file as { path?: unknown; content?: unknown; contentBase64?: unknown };
+    if (typeof record.path !== 'string' || !record.path.trim()) {
+      throw new Error('invalid import file path');
+    }
+    if (typeof record.contentBase64 === 'string') {
+      return { path: record.path, body: Buffer.from(record.contentBase64, 'base64') };
+    }
+    if (typeof record.content !== 'string') throw new Error('invalid import file content');
+    return { path: record.path, body: Buffer.from(record.content, 'utf8') };
+  });
+}
+
+function claudeDesignProjectId(req: { body?: unknown; query?: unknown }): string | null {
+  const fromBody = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+    ? (req.body as { projectId?: unknown }).projectId
+    : undefined;
+  const fromQuery = req.query && typeof req.query === 'object'
+    ? (req.query as { projectId?: unknown }).projectId
+    : undefined;
+  const value = typeof fromBody === 'string'
+    ? fromBody
+    : typeof fromQuery === 'string'
+      ? fromQuery
+      : '';
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function claudeDesignImportPayload(imported: ClaudeDesignImportResult) {
+  return {
+    entryFile: imported.entryFile,
+    files: imported.files,
+    kinds: imported.kinds,
+    entryKind: imported.entryKind,
+    previewTransport: imported.previewTransport,
+  };
 }
 
 export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps) {
@@ -107,37 +198,85 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
   } = ctx.validation;
   app.post(
     '/api/import/claude-design',
-    importUpload.single('file'),
+    importUpload.any(),
     async (req, res) => {
+      const uploads = collectClaudeDesignUploads(req);
+      const unlinkUploads = () => {
+        for (const upload of uploads) fs.promises.unlink(upload.tempPath).catch(() => {});
+      };
       let importedProjectDir: string | null = null;
       try {
-        if (!req.file)
+        const jsonFiles = looseFilesFromJson(req.body);
+        const zipUploads = uploads.filter((upload) => /\.zip$/i.test(upload.originalName));
+        const targetProjectId = claudeDesignProjectId(req);
+        if (uploads.length === 0 && (!jsonFiles || jsonFiles.length === 0)) {
           return res.status(400).json({ error: 'zip file required' });
+        }
+        if (zipUploads.length > 0 && (zipUploads.length !== uploads.length || (jsonFiles && jsonFiles.length > 0))) {
+          return res.status(400).json({ error: 'send either a .zip or loose files, not both' });
+        }
+        if (zipUploads.length > 1) {
+          return res.status(400).json({ error: 'expected a single .zip file' });
+        }
+        const zipUpload = zipUploads.length === 1 ? zipUploads[0] : undefined;
+
+        const runImport = async (dir: string): Promise<ClaudeDesignImportResult> => {
+          if (zipUpload) return importClaudeDesignZip(zipUpload.tempPath, dir);
+          const loose: Array<{ path: string; body: Buffer }> = [];
+          for (const upload of uploads) {
+            loose.push({
+              path: upload.originalName,
+              body: await readFile(upload.tempPath),
+            });
+          }
+          if (jsonFiles) loose.push(...jsonFiles);
+          return importClaudeDesignFiles(loose, dir);
+        };
+
+        if (targetProjectId) {
+          const existing = getProject(db, targetProjectId);
+          if (!existing) return res.status(404).json({ error: 'project not found' });
+          if (
+            ctx.enforceWorkspaceProjectMutation
+            && !(await ctx.enforceWorkspaceProjectMutation(
+              req,
+              res,
+              sendApiError,
+              getWorkspaceProject,
+              getWorkspaceProjectByProjectId,
+              db,
+              targetProjectId,
+              'writeFiles',
+            ))
+          ) {
+            return;
+          }
+          const dir = resolveProjectDir(PROJECTS_DIR, targetProjectId, existing.metadata);
+          const imported = await runImport(dir);
+          return res.json({
+            projectId: targetProjectId,
+            ...claudeDesignImportPayload(imported),
+          });
+        }
+
         const createWorkspace = await authorizeCreatedProjectWorkspace(
           req,
           ctx.fetchProjectCreationWorkspaceDirectory,
         );
         if (!createWorkspace.ok) {
-          fs.promises.unlink(req.file.path).catch(() => {});
           return sendCreatedProjectWorkspaceError(res, createWorkspace);
         }
-        const originalName =
-          req.file.originalname || 'Claude Design export.zip';
-        if (!/\.zip$/i.test(originalName)) {
-          fs.promises.unlink(req.file.path).catch(() => {});
-          return res.status(400).json({ error: 'expected a .zip file' });
-        }
+        const originalName = zipUpload?.originalName
+          ?? uploads[0]?.originalName
+          ?? jsonFiles?.[0]?.path
+          ?? 'Claude Design import';
         const id = randomId();
         const now = Date.now();
-        const baseName =
-          originalName.replace(/\.zip$/i, '').trim() || 'Claude Design import';
-        importedProjectDir = projectDir(PROJECTS_DIR, id);
-        const imported = await importClaudeDesignZip(
-          req.file.path,
-          importedProjectDir,
-        );
-        fs.promises.unlink(req.file.path).catch(() => {});
-
+        const baseName = path.basename(originalName).replace(/\.(zip|html?)$/i, '').trim() || 'Claude Design import';
+        const createdDir = projectDir(PROJECTS_DIR, id);
+        importedProjectDir = createdDir;
+        const imported = await runImport(createdDir);
+        const sourceLabel = zipUpload ? 'ZIP' : 'HTML';
         const cid = randomId();
         const project = db.transaction(() => {
           const createdProject = insertProject(db, {
@@ -145,12 +284,13 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
             name: baseName,
             skillId: null,
             designSystemId: null,
-            pendingPrompt: `Imported from Claude Design ZIP: ${originalName}. Continue editing ${imported.entryFile}.`,
+            pendingPrompt: `Imported from Claude Design ${sourceLabel}: ${originalName}. Continue editing ${imported.entryFile}.`,
             metadata: {
-              kind: 'prototype',
+              kind: imported.entryKind === 'deck' ? 'deck' : 'prototype',
               importedFrom: 'claude-design',
               entryFile: imported.entryFile,
               sourceFileName: originalName,
+              absorbedKind: imported.entryKind,
             },
             createdAt: now,
             updatedAt: now,
@@ -174,15 +314,15 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
         res.json({
           project,
           conversationId: cid,
-          entryFile: imported.entryFile,
-          files: imported.files,
+          ...claudeDesignImportPayload(imported),
         });
       } catch (err: any) {
-        if (req.file?.path) fs.promises.unlink(req.file.path).catch(() => {});
         if (importedProjectDir) {
           await fs.promises.rm(importedProjectDir, { recursive: true, force: true }).catch(() => {});
         }
-        res.status(400).json({ error: String(err) });
+        if (!res.headersSent) res.status(400).json({ error: String(err) });
+      } finally {
+        unlinkUploads();
       }
     },
   );
