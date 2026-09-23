@@ -845,6 +845,13 @@ export interface ComposeInput {
   // `detectPlatformIntentSignal`). ORed with the metadata-based platform
   // gate for PLATFORM_CONTRACTS_BLOCK under slim; absent = metadata only.
   platformHintSignal?: boolean | undefined;
+  // Preformatted connected-target digest (F2). Omit when no target is bound
+  // so the block is absent. Format with `formatTargetContextDigest` from
+  // `targets/target-context.ts`. Caller injection site: apps/daemon/src/server.ts
+  // `defaultSystemPromptInputs` beside `designSystemBody` (~line 10039).
+  // OD Next cannot carry it until `OdNextStrategyStableRequestContextV2`
+  // grows the field; that object is `odNextStableRequestContext` (~line 10143).
+  targetContextDigest?: string | undefined;
 }
 
 export function composeSystemPrompt({
@@ -887,6 +894,7 @@ export function composeSystemPrompt({
   promptCoreVariant,
   mediaHintSignal,
   platformHintSignal,
+  targetContextDigest,
 }: ComposeInput): string {
   if (odNextStrategyRecipe) {
     return composeOdNextStrategyRequestPromptV2(odNextStrategyRecipe, {
@@ -1250,6 +1258,13 @@ export function composeSystemPrompt({
   if (designSystemPullIndex && designSystemPullIndex.trim().length > 0) {
     parts.push(
       `\n\n## Pull-layer files available on demand${designSystemTitle ? ` — ${designSystemTitle}` : ''}\n\nThis design-system package declares richer files for inspection, source evidence, or human preview. Keep the push prompt light: use the index below to decide what to read later. When the runtime tool environment is available, read a listed path with \`\"$OD_NODE_BIN\" \"$OD_BIN\" tools design-systems read --path <path>\`; the daemon will reject paths outside this manifest allowlist.\n\n\`\`\`text\n${designSystemPullIndex.trim()}\n\`\`\``,
+    );
+  }
+
+  const targetDigest = targetContextDigest?.trim();
+  if (targetDigest) {
+    parts.push(
+      `\n\n## Connected target\n\nDraft against this digest of the connected target. Do not write the target directly; promotion is the only write path.\n\n${targetDigest}`,
     );
   }
 
