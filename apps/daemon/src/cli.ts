@@ -6,6 +6,8 @@ import { runDaemonCliStartup, startDaemonRuntime } from './daemon-startup.js';
 import { runLiveArtifactsMcpServer } from './mcp-live-artifacts-server.js';
 import { runArtifactsCli } from './artifacts-cli.js';
 import { runResource } from './resource-cli.js';
+import { runTarget } from './target-cli.js';
+import { runImport } from './claude-design-import-cli.js';
 import { runProjectHandoff } from './handoff-cli.js';
 import { runConnectorsToolCli } from './tools-connectors-cli.js';
 import { runDesignSystemsToolCli } from './tools-design-systems-cli.js';
@@ -428,7 +430,19 @@ const SUBCOMMAND_MAP = {
   config: runConfig,
   library: runLibrary,
   figma: runFigma,
+  target: runTargetCommand,
+  import: runImportCommand,
 };
+
+async function runTargetCommand(args) {
+  const { exitCode } = await runTarget(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+async function runImportCommand(args) {
+  const { exitCode } = await runImport(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
 
 function printStrategyHelp() {
   console.log(`Usage:

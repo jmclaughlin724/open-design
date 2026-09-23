@@ -16,7 +16,7 @@ describe('od import claude-design CLI', () => {
   let stdoutSpy: { mockRestore: () => void };
   let stderrSpy: { mockRestore: () => void };
   let fetchMock: ReturnType<typeof vi.fn>;
-  let previousExitCode: number | undefined;
+  let previousExitCode: typeof process.exitCode;
   const tempDirs: string[] = [];
 
   beforeEach(() => {

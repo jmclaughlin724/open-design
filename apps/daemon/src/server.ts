@@ -496,6 +496,7 @@ import { importFigmaFromBytes } from './figma/figma-import.js';
 import { renderDesignSystemPreview } from './design-systems/preview.js';
 import { renderDesignSystemShowcase } from './design-systems/showcase.js';
 import { createChatRunService } from './runtimes/runs.js';
+import { createRunStreamComposer } from './runtimes/run-stream-composer.js';
 import {
   createAmrTerminalReportDeliveryService,
   createAmrTerminalReportFinalizer,
@@ -837,6 +838,8 @@ import { registerMcpRoutes } from './mcp-routes.js';
 import { registerXaiRoutes } from './routes/xai.js';
 import { registerLiveArtifactRoutes } from './routes/live-artifact.js';
 import { registerDesignSystemToolRoutes } from './routes/design-system-tool.js';
+import { createPreviewTokenServeMiddleware, registerPreviewTokenRoutes } from './routes/preview-tokens.js';
+import { registerTargetRoutes } from './routes/targets.js';
 import { registerDeployRoutes, registerDeploymentCheckRoutes } from './routes/deploy.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes, createEnforceWorkspaceProjectMutation } from './routes/project/index.js';
@@ -8457,6 +8460,14 @@ export async function startServer({
     fetchProjectCreationWorkspaceDirectory,
     enforceWorkspaceProjectMutation: enforceAuthoritativeProjectMutation,
   });
+  registerTargetRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    auth: authDeps,
+    projectStore: projectStoreDeps,
+    authorizeProjectRequest,
+  });
 
   // Whether the caller may mutate (edit / publish-toggle / delete) a design
   // system. A system pulled from a teammate's team share (`teamSynced` in its
@@ -8672,6 +8683,15 @@ export async function startServer({
     paths: pathDeps,
     projects: { getProject: (id: string) => getProject(db, id) },
   });
+  const previewTokens = registerPreviewTokenRoutes(app, {
+    authorizeProjectRequest,
+    getProject: (id) => getProject(db, id),
+  });
+  const previewTokenServe = createPreviewTokenServeMiddleware(previewTokens, {
+    isSameOrigin: (req) => isLocalSameOrigin(req, resolvedPort),
+  });
+  app.use('/artifacts', previewTokenServe);
+  app.use('/frames', previewTokenServe);
   app.use('/artifacts', express.static(ARTIFACTS_DIR));
   app.use(
     PLUGIN_PREVIEWS_ROUTE,
@@ -10417,7 +10437,9 @@ export async function startServer({
         odNextTaskInputSnapshot = null;
       }
     };
+    let streamComposer = null;
     const finishRun = (status, code = null, signal = null) => {
+      for (const frame of streamComposer?.flush() ?? []) send(frame.event, frame.data);
       cleanupOdNextRunInputProjection();
       finalizeRunMessageEvents(db, run);
       return design.runs.finish(run, status, code, signal);
@@ -14098,12 +14120,12 @@ export async function startServer({
     // coverage. observe runs AFTER the send so a `tool_loop` warning/halt
     // follows the result that triggered it in the stream. (PR #3375 review:
     // Copilot and ACP bypassed the guard by calling send('agent', …) directly.)
+    streamComposer = createRunStreamComposer();
     function emitAgentEvent(ev: any) {
-      // Fold work-completeness signals (TodoWrite snapshot / truncation) off the
-      // stream BEFORE the send, so run.lastTodoSnapshot / run.truncatedMidTurn are
-      // set by the time finish() derives run.endedWithUnfinishedWork (#1247/#1060).
+      // Fold work-completeness signals before the send so finish() sees them.
       captureRunWorkCompletenessSignals(run, ev);
       noteFirstOutputEvent(ev);
+      for (const frame of streamComposer.observe(ev)) send(frame.event, frame.data);
       send('agent', ev);
       observeToolEventForLoop(ev);
     }

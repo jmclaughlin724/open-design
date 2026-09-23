@@ -739,19 +739,19 @@ clean one; report present in dry-run output.
 - [x] A2 DESIGN.md section schema *(done — local)*
 - [ ] B1 check_design_system tool
 - [ ] B2 render_probe tool
-- [ ] B3 SSE roll-ups + todo events
-- [ ] C1 Anchor-stable comments
-- [ ] C2 Per-project preview tokens
+- [x] B3 SSE roll-ups + todo events *(merged, wired into emitAgentEvent)*
+- [x] C1 Anchor-stable comments *(merged)*
+- [x] C2 Per-project preview tokens *(merged, wired before static serve)*
 - [ ] C3 Resolved design-system manifest cache
 - [ ] D1 Design-system document canvas
 - [ ] D2 Feedback→usage-notes persistence
-- [ ] D3 Composer chips + template starters + start-from-code
-- [ ] D4 Workspace-default design system + starred filter + thumbnails
-- [ ] E1 Absorb pipeline (raw HTML ingest + normalization)
-- [ ] E2 File-kind detection
+- [ ] D3 Composer chips + template starters + start-from-code *(helpers only, UI not wired)*
+- [ ] D4 Workspace-default design system + starred filter + thumbnails *(default id stored; list UI not wired)*
+- [x] E1 Absorb pipeline (raw HTML ingest + normalization) *(merged)*
+- [x] E2 File-kind detection *(merged)*
 - [ ] E3 Context extraction (design-context.json + MCP tool + skill)
 - [ ] E4 Claude Design HTML → design-system source adapter
-- [ ] F1 Connected-target model
+- [x] F1 Connected-target model *(merged, `od target` wired)*
 - [ ] F2 Target context acquisition
 - [ ] F3 Base snapshot + drift detection
 - [ ] F4 Change kinds + staged-changes view
