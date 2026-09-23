@@ -840,6 +840,11 @@ import { registerLiveArtifactRoutes } from './routes/live-artifact.js';
 import { registerDesignSystemToolRoutes } from './routes/design-system-tool.js';
 import { createPreviewTokenServeMiddleware, registerPreviewTokenRoutes } from './routes/preview-tokens.js';
 import { registerTargetRoutes } from './routes/targets.js';
+import { registerDesignSystemCheckRoutes } from './routes/design-system-check.js';
+import { registerDesignSystemResolvedRoutes } from './routes/design-system-resolved.js';
+import { registerDesignContextRoutes } from './routes/design-context.js';
+import { registerRenderProbeRoutes } from './routes/render-probe.js';
+import { createRenderProbeHtmlReader } from './services/render-probe.js';
 import { registerDeployRoutes, registerDeploymentCheckRoutes } from './routes/deploy.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes, createEnforceWorkspaceProjectMutation } from './routes/project/index.js';
@@ -8467,6 +8472,37 @@ export async function startServer({
     auth: authDeps,
     projectStore: projectStoreDeps,
     authorizeProjectRequest,
+  });
+  registerDesignSystemCheckRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    authorizeProjectRequest,
+  });
+  registerDesignSystemResolvedRoutes(app, {
+    db,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    authorizeProjectRequest,
+  });
+  registerDesignContextRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    projectFiles: projectFileDeps,
+    authorizeProjectRequest,
+  });
+  const renderProbeFiles = createRenderProbeHtmlReader({
+    projectsRoot: PROJECTS_DIR,
+    getProject: (id) => getProject(db, id),
+  });
+  registerRenderProbeRoutes(app, {
+    authorizeProjectRequest,
+    http: httpDeps,
+    projectExists: renderProbeFiles.projectExists,
+    readHtml: renderProbeFiles.readHtml,
   });
 
   // Whether the caller may mutate (edit / publish-toggle / delete) a design

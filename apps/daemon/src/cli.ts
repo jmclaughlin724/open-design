@@ -8,6 +8,9 @@ import { runArtifactsCli } from './artifacts-cli.js';
 import { runResource } from './resource-cli.js';
 import { runTarget } from './target-cli.js';
 import { runImport } from './claude-design-import-cli.js';
+import { runDesignSystemCheck } from './design-system-check-cli.js';
+import { runProbe } from './render-probe-cli.js';
+import { runContext } from './design-context-cli.js';
 import { runProjectHandoff } from './handoff-cli.js';
 import { runConnectorsToolCli } from './tools-connectors-cli.js';
 import { runDesignSystemsToolCli } from './tools-design-systems-cli.js';
@@ -432,6 +435,9 @@ const SUBCOMMAND_MAP = {
   figma: runFigma,
   target: runTargetCommand,
   import: runImportCommand,
+  'design-system': runDesignSystemCheckCommand,
+  probe: runProbeCommand,
+  context: runContextCommand,
 };
 
 async function runTargetCommand(args) {
@@ -441,6 +447,21 @@ async function runTargetCommand(args) {
 
 async function runImportCommand(args) {
   const { exitCode } = await runImport(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+async function runDesignSystemCheckCommand(args) {
+  const { exitCode } = await runDesignSystemCheck(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+async function runProbeCommand(args) {
+  const { exitCode } = await runProbe(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+async function runContextCommand(args) {
+  const { exitCode } = await runContext(args);
   if (exitCode !== 0) process.exitCode = exitCode;
 }
 
