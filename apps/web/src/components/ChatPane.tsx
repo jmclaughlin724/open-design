@@ -4,6 +4,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -14,7 +15,16 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { hasOdCard, OD_NEXT_STRATEGY_ID } from '@open-design/contracts';
+import { Button } from '@open-design/components';
+import {
+  hasOdCard,
+  OD_NEXT_STRATEGY_ID,
+  TOOL_ACTIVITY_KINDS,
+  type PlanTodoSnapshotItem,
+  type PlanUpdateSsePayload,
+  type ToolActivityKind,
+  type ToolActivitySsePayload,
+} from '@open-design/contracts';
 import { useAnalytics } from '../analytics/provider';
 import { getResolvedDeviceId } from '../analytics/client';
 import {
@@ -78,6 +88,7 @@ import { agentDisplayName } from '../utils/agentLabels';
 import { commentTargetDisplayName, commentsToAttachments, simplePositionLabel } from '../comments';
 import { AssistantMessage, type QuestionFormSubmitHandler } from './AssistantMessage';
 import { TodoCard } from './ToolCard';
+import rollupStyles from './stream-rollups.module.css';
 import type { BrandBrowserAssistConfirm } from './OdCard';
 import {
   DESIGN_SYSTEM_NEXT_STEP_ACTIONS,
@@ -615,6 +626,16 @@ interface Props {
   // AssistantMessage so an in-flight Write/Edit can render its code in real
   // time before the full `tool_use` arrives. Never persisted.
   liveToolInput?: Record<string, { name: string; text: string; seq?: number }>;
+  /**
+   * Live SSE tool-kind roll-up for the current run. Omitted, empty, or
+   * malformed payloads render nothing.
+   */
+  toolActivity?: ToolActivitySsePayload | null;
+  /**
+   * Live SSE todo snapshot for the current run. Omitted, empty, or
+   * non-structural payloads render nothing.
+   */
+  planUpdate?: PlanUpdateSsePayload | null;
   initialDraft?: string;
   // Product path of the Home recommendation that started this project. When
   // set (and concrete), the empty-conversation starter cards show that path's
@@ -991,6 +1012,8 @@ export function ChatPane({
   shareToOpenDesignBusyMessageId,
   forceStreamingMessageIds,
   liveToolInput,
+  toolActivity = null,
+  planUpdate = null,
   initialDraft,
   onboardingStarterPath = null,
   composerPlaceholder,
@@ -1093,6 +1116,7 @@ export function ChatPane({
   const composerSlotRef = useRef<HTMLDivElement | null>(null);
   const composerLayerRef = useRef<HTMLDivElement | null>(null);
   const pinnedTodoRef = useRef<HTMLDivElement | null>(null);
+  const streamRollupRef = useRef<HTMLDivElement | null>(null);
   const queuedSendStripRef = useRef<HTMLDivElement | null>(null);
   const didInitialScrollRef = useRef(false);
   const runFailedToastSurfaceKeysRef = useRef<Set<string>>(new Set());
@@ -2188,6 +2212,7 @@ export function ChatPane({
     };
 
     let observedPinnedTodo: Element | null = null;
+    let observedStreamRollup: Element | null = null;
     let observedQueuedSendStrip: Element | null = null;
     const syncPinnedTodo = () => {
       if (!resizeObserver) return;
@@ -2199,6 +2224,18 @@ export function ChatPane({
       } else if (!pinnedEl && observedPinnedTodo) {
         resizeObserver.unobserve(observedPinnedTodo);
         observedPinnedTodo = null;
+      }
+    };
+    const syncStreamRollup = () => {
+      if (!resizeObserver) return;
+      const rollupEl = streamRollupRef.current;
+      if (rollupEl && observedStreamRollup !== rollupEl) {
+        if (observedStreamRollup) resizeObserver.unobserve(observedStreamRollup);
+        resizeObserver.observe(rollupEl);
+        observedStreamRollup = rollupEl;
+      } else if (!rollupEl && observedStreamRollup) {
+        resizeObserver.unobserve(observedStreamRollup);
+        observedStreamRollup = null;
       }
     };
     const syncQueuedSendStrip = () => {
@@ -2218,6 +2255,7 @@ export function ChatPane({
 
     syncObservedChildren();
     syncPinnedTodo();
+    syncStreamRollup();
     syncQueuedSendStrip();
 
     const mutationObserver =
@@ -2225,6 +2263,7 @@ export function ChatPane({
         ? new MutationObserver(() => {
             syncObservedChildren();
             syncPinnedTodo();
+            syncStreamRollup();
             syncQueuedSendStrip();
             followLatestIfPinned();
           })
@@ -2237,9 +2276,9 @@ export function ChatPane({
       childList: true,
       subtree: true,
     });
-    // PinnedTodoSlot and QueuedSendStrip live outside the chat-log subtree.
-    // Watch their nearest common ancestor so resize observation follows those
-    // surfaces when they mount or unmount.
+    // PinnedTodoSlot, stream roll-ups, and QueuedSendStrip live outside the
+    // chat-log subtree. Watch their nearest common ancestor so resize
+    // observation follows those surfaces when they mount or unmount.
     const paneEl = el.parentElement?.parentElement ?? null;
     if (paneEl && mutationObserver) {
       mutationObserver.observe(paneEl, { childList: true });
@@ -3095,6 +3134,11 @@ export function ChatPane({
               <span>{t('chat.jumpToLatest')}</span>
             </button>
           </div>
+          <StreamRollupSlot
+            toolActivity={toolActivity}
+            planUpdate={planUpdate}
+            containerRef={streamRollupRef}
+          />
           <PinnedTodoSlot
             messages={displayMessages}
             streaming={streaming}
@@ -4064,6 +4108,116 @@ function includeVirtualRowByKey<T extends { key: string }>(
       top: offsets[index] ?? 0,
     },
   ].sort((a, b) => a.index - b.index);
+}
+
+const TOOL_ACTIVITY_LABEL: Record<ToolActivityKind, keyof Dict> = {
+  writing: 'assistant.verbWriting',
+  editing: 'assistant.verbEditing',
+  reading: 'assistant.verbReading',
+  searching: 'assistant.verbSearching',
+  running: 'assistant.verbRunning',
+  fetching: 'assistant.verbFetching',
+  other: 'assistant.verbCalling',
+};
+
+function toolActivityChipLabel(
+  kind: ToolActivityKind,
+  count: number,
+  t: (key: keyof Dict) => string,
+): string {
+  const label = t(TOOL_ACTIVITY_LABEL[kind] ?? 'assistant.verbCalling');
+  return count > 1 ? `${label} ×${count}` : label;
+}
+
+function toolActivityChips(
+  payload: ToolActivitySsePayload | null,
+): Array<{ kind: ToolActivityKind; count: number }> {
+  if (!payload?.counts || typeof payload.counts !== 'object') return [];
+  const chips: Array<{ kind: ToolActivityKind; count: number }> = [];
+  for (const kind of TOOL_ACTIVITY_KINDS) {
+    const count = payload.counts[kind];
+    if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) continue;
+    chips.push({ kind, count: Math.floor(count) });
+  }
+  return chips;
+}
+
+function planTodos(payload: PlanUpdateSsePayload | null): PlanUpdateSsePayload['todos'] {
+  if (!payload || !Array.isArray(payload.todos)) return [];
+  return payload.todos.filter((todo: PlanTodoSnapshotItem) => (
+    typeof todo?.content === 'string' &&
+    todo.content.length > 0 &&
+    (todo.status === 'pending' ||
+      todo.status === 'in_progress' ||
+      todo.status === 'completed' ||
+      todo.status === 'stopped')
+  ));
+}
+
+function StreamRollupSlot({
+  toolActivity,
+  planUpdate,
+  containerRef,
+}: {
+  toolActivity: ToolActivitySsePayload | null;
+  planUpdate: PlanUpdateSsePayload | null;
+  containerRef?: MutableRefObject<HTMLDivElement | null>;
+}) {
+  const t = useT();
+  const panelId = useId();
+  const [open, setOpen] = useState(true);
+  const chips = toolActivityChips(toolActivity);
+  const todos = planTodos(planUpdate);
+  if (chips.length === 0 && todos.length === 0) return null;
+  return (
+    <div className={rollupStyles.slot} data-testid="stream-rollups" ref={containerRef}>
+      {chips.length > 0 ? (
+        <div className={rollupStyles.chips} data-testid="tool-activity-chips">
+          {chips.map((chip) => (
+            <span
+              className={rollupStyles.chip}
+              data-kind={chip.kind}
+              data-testid="tool-activity-chip"
+              key={chip.kind}
+            >
+              {toolActivityChipLabel(chip.kind, chip.count, t)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {todos.length > 0 ? (
+        <section className={rollupStyles.todos} data-testid="plan-update">
+          <Button
+            variant="ghost"
+            className={rollupStyles.toggle}
+            aria-expanded={open}
+            aria-controls={panelId}
+            onClick={() => setOpen((current) => !current)}
+          >
+            {t('tool.todos')}
+          </Button>
+          <div
+            id={panelId}
+            className={`accordion-collapsible${open ? ' open' : ''}`}
+          >
+            <div className="accordion-collapsible-inner">
+              <ul className={rollupStyles.list}>
+                {todos.map((todo) => (
+                  <li
+                    className={rollupStyles.item}
+                    data-status={todo.status}
+                    key={`${todo.status}:${todo.content}`}
+                  >
+                    {todo.content}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
 }
 
 function PinnedTodoSlot({

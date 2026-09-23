@@ -11,7 +11,7 @@ import type {
   Conversation,
   ProjectFile,
 } from '../../types';
-import type { ChatSessionMode, WorkspaceCollabContext } from '@open-design/contracts';
+import type { ChatSessionMode, PlanUpdateSsePayload, ToolActivitySsePayload, WorkspaceCollabContext } from '@open-design/contracts';
 import type { ChatSendMeta } from '../ChatComposer';
 import { useConversationChat } from './useConversationChat';
 import styles from './SideChatTab.module.css';
@@ -58,6 +58,8 @@ export interface ActiveConversationChatState {
     assistantMessage: ChatMessage,
     change: ChatMessageFeedbackChange,
   ) => void;
+  toolActivity?: ToolActivitySsePayload | null;
+  planUpdate?: PlanUpdateSsePayload | null;
 }
 
 interface Props {
@@ -177,6 +179,8 @@ export function SideChatTab({
           onNewConversation={onNewConversation}
           researchAvailable={config.mode === 'daemon'}
           config={config}
+          toolActivity={controlledChat ? controlledChat.toolActivity ?? null : chat.toolActivity}
+          planUpdate={controlledChat ? controlledChat.planUpdate ?? null : chat.planUpdate}
         />
       </div>
     </div>

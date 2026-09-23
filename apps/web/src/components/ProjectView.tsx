@@ -68,7 +68,9 @@ import {
   type ByokChatProtocol,
   type ChatTaskExecutionAnalytics,
   type ProjectWorkspaceScope,
+  type PlanUpdateSsePayload,
   type ResearchOptions,
+  type ToolActivitySsePayload,
 } from '@open-design/contracts';
 import {
   anonymizeArtifactId,
@@ -2296,6 +2298,8 @@ export function ProjectView({
   // streaming, so the renderer can place the live card at the tool call's
   // position in the message (text before it = preamble, after it = hedging).
   const [liveToolInput, setLiveToolInput] = useState<Record<string, { name: string; text: string; seq: number }>>({});
+  const [toolActivity, setToolActivity] = useState<ToolActivitySsePayload | null>(null);
+  const [planUpdate, setPlanUpdate] = useState<PlanUpdateSsePayload | null>(null);
   // True once the initial DB read for the active conversation has settled.
   // Auto-send gates on this so it can't fire before listMessages resolves and
   // race-clobber the freshly-pushed user + assistant placeholder. Without
@@ -2326,7 +2330,11 @@ export function ProjectView({
   // Safety net: drop any live tool-input partials whose tool never produced a
   // full `tool_use` (run errored/canceled mid-call) once streaming settles.
   useEffect(() => {
-    if (!streaming) setLiveToolInput((prev) => (Object.keys(prev).length ? {} : prev));
+    if (!streaming) {
+      setLiveToolInput((prev) => (Object.keys(prev).length ? {} : prev));
+      setToolActivity((prev) => (prev ? null : prev));
+      setPlanUpdate((prev) => (prev ? null : prev));
+    }
   }, [streaming]);
   const [paneError, setPaneError] = useState<{
     message: string;
@@ -4697,6 +4705,8 @@ export function ProjectView({
     streamingConversationIdRef.current = conversationId;
     setStreaming(true);
     setStreamingConversationId(conversationId);
+    setToolActivity(null);
+    setPlanUpdate(null);
   }, []);
 
   const clearStreamingMarker = useCallback((conversationId?: string | null) => {
@@ -5927,6 +5937,12 @@ export function ProjectView({
             },
             onArtifactCount: (count) => {
               daemonArtifactCount = count;
+            },
+            onToolActivity: (payload: ToolActivitySsePayload) => {
+              setToolActivity(payload);
+            },
+            onPlanUpdate: (payload: PlanUpdateSsePayload) => {
+              setPlanUpdate(payload);
             },
             onDone: async () => {
               // A reattached run interrupted by a "send now" still receives a
@@ -7644,6 +7660,12 @@ export function ProjectView({
         },
         onArtifactCount: (count: number) => {
           daemonArtifactCount = count;
+        },
+        onToolActivity: (payload: ToolActivitySsePayload) => {
+          setToolActivity(payload);
+        },
+        onPlanUpdate: (payload: PlanUpdateSsePayload) => {
+          setPlanUpdate(payload);
         },
         onToolInputDelta: (id: string, name: string, delta: string) => {
           setLiveToolInput((prev) => ({
@@ -9970,6 +9992,8 @@ export function ProjectView({
             onReorderQueuedSends: reorderCurrentConversationQueuedChatSends,
             onSendQueuedNow: sendQueuedChatSendNow,
             onAssistantFeedback: handleAssistantFeedback,
+            toolActivity,
+            planUpdate,
           }
         : undefined,
     [
@@ -9987,9 +10011,11 @@ export function ProjectView({
       handleComposerSend,
       handleStop,
       messages,
+      planUpdate,
       removeQueuedChatSend,
       reorderCurrentConversationQueuedChatSends,
       sendQueuedChatSendNow,
+      toolActivity,
       updateQueuedChatSend,
     ],
   );
@@ -11457,6 +11483,8 @@ export function ProjectView({
               messages={messages}
               streaming={currentConversationControlStreaming}
               liveToolInput={liveToolInput}
+              toolActivity={streamingConversationId === activeConversationId ? toolActivity : null}
+              planUpdate={streamingConversationId === activeConversationId ? planUpdate : null}
               loading={currentConversationLoading}
               // A read-only viewer of a team-shared project cannot drive artifact
               // changes through chat (comments go through the separate overlay).
