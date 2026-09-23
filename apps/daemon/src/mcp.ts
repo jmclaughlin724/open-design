@@ -36,7 +36,9 @@ import {
   type McpAnalyticsContextResponse,
   type WorkspaceProjectsResponse,
 } from '@open-design/contracts';
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 import { postCreateArtifactRequest } from './artifacts/create.js';
 import { resolveMcpWorkspaceContext } from './mcp-workspace-context.js';
@@ -62,6 +64,25 @@ import {
   validatePluginRequestId,
   validatePluginWorkflowId,
 } from './mcp-observability.js';
+import { extractDesignContext } from './design/design-context.js';
+import { checkProjectDesignSystem } from './design-systems/check-design-system.js';
+import { readDesignSystemAssets } from './design-systems/index.js';
+import {
+  resolveDaemonResourceDir,
+  resolveDaemonResourceRoot,
+  resolveDataDir,
+  resolveProcessResourcesPath,
+} from './daemon-paths.js';
+import { resolveProjectRoot } from './project-root.js';
+import { readProjectFile } from './projects.js';
+import {
+  RENDER_PROBE_LIMITATION,
+  RENDER_PROBE_MCP_TOOL,
+  RenderProbeError,
+  buildRenderProbeResponse,
+  evaluateRenderProbe,
+  readRenderProbeHtml,
+} from './services/render-probe.js';
 
 const SERVER_NAME = 'open-design';
 const SERVER_VERSION = '0.2.0';
@@ -91,7 +112,7 @@ interface ProjectPayload { project?: ProjectSummary; id?: string; name?: string;
 interface ActiveContext { active?: boolean; projectId?: string; projectName?: string | null; fileName?: string | null; ageMs?: number | null }
 type ResolvedProject = { id: string; name: string; source: 'uuid' | 'id' | 'exact' | 'slug' | 'substring' };
 interface ProjectListCache { baseUrl: string; t: number; list: ProjectSummary[] }
-interface McpArgs extends JsonObject { project?: unknown; entry?: unknown; include?: unknown; maxBytes?: unknown; path?: unknown; offset?: unknown; limit?: unknown; since?: unknown; query?: unknown; pattern?: unknown; max?: unknown; name?: unknown; content?: unknown; encoding?: unknown; artifactManifest?: unknown; confirm?: unknown; prompt?: unknown; plugin?: unknown; inputs?: unknown; agent?: unknown; model?: unknown; serviceTier?: unknown; apiKey?: unknown; requestId?: unknown; resume?: unknown; runId?: unknown; id?: unknown; designSystem?: unknown; skill?: unknown; skills?: string[]; includeUnavailable?: unknown; artifactType?: unknown; projectTitle?: unknown; locale?: unknown; knownAnswers?: unknown; skip?: unknown; briefDraftId?: unknown; nonce?: unknown; answers?: unknown; externalPluginContext?: unknown; pluginWorkflowId?: unknown }
+interface McpArgs extends JsonObject { project?: unknown; entry?: unknown; include?: unknown; maxBytes?: unknown; path?: unknown; offset?: unknown; limit?: unknown; since?: unknown; query?: unknown; pattern?: unknown; max?: unknown; name?: unknown; content?: unknown; encoding?: unknown; artifactManifest?: unknown; confirm?: unknown; prompt?: unknown; plugin?: unknown; inputs?: unknown; agent?: unknown; model?: unknown; serviceTier?: unknown; apiKey?: unknown; requestId?: unknown; resume?: unknown; runId?: unknown; id?: unknown; designSystem?: unknown; skill?: unknown; skills?: string[]; includeUnavailable?: unknown; artifactType?: unknown; projectTitle?: unknown; locale?: unknown; knownAnswers?: unknown; skip?: unknown; briefDraftId?: unknown; nonce?: unknown; answers?: unknown; externalPluginContext?: unknown; pluginWorkflowId?: unknown; file?: unknown; expression?: unknown; eval?: unknown; screenshot?: unknown }
 interface ProjectFileBundleEntry { name: string; mime: string; size: number | null; content: string | null; binary: boolean }
 interface BundleInput { project: ProjectPayload | ProjectSummary; entry: string; files: ProjectFileBundleEntry[]; truncated: boolean; skippedFileCount?: number; active: ActiveContext | null; resolved?: ResolvedProject | null }
 interface ErrorWithCode { message?: string; code?: string; cause?: { code?: string } }
@@ -113,6 +134,8 @@ interface McpToolCallResult {
 }
 
 const SAFE_MCP_DAEMON_RETRY_CALLS = new Set([
+  'check_design_system',
+  'getDesignContext',
   'get_active_context',
   'get_artifact',
   'get_file',
@@ -126,6 +149,7 @@ const SAFE_MCP_DAEMON_RETRY_CALLS = new Set([
   'list_resources',
   'list_skills',
   'read_resource',
+  'renderProbe',
   'search_files',
 ]);
 
@@ -850,6 +874,51 @@ export const TOOL_DEFS = [
       additionalProperties: false,
     },
     annotations: { ...READ_ANNOTATIONS, title: 'List OpenDesign agents' },
+  },
+  {
+    name: 'check_design_system',
+    description:
+      'Check the active project against its design-system token contract. Scans the project HTML/CSS for unknown or undeclared tokens and returns the violation report. Does not run a browser.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        project: PROJECT_ARG,
+      },
+    },
+    annotations: { ...READ_ANNOTATIONS, title: 'Check design system' },
+  },
+  {
+    name: RENDER_PROBE_MCP_TOOL.name,
+    description: RENDER_PROBE_MCP_TOOL.description,
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: [...RENDER_PROBE_MCP_TOOL.inputSchema.required],
+      properties: {
+        project: PROJECT_ARG,
+        ...RENDER_PROBE_MCP_TOOL.inputSchema.properties,
+      },
+    },
+    annotations: { ...READ_ANNOTATIONS, title: 'Probe rendered HTML' },
+  },
+  {
+    name: 'getDesignContext',
+    description:
+      'Extract an agent-consumable design-context document from an absorbed HTML file in the active project. Returns headings, CSS custom properties, and image paths. HTML parse only.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['file'],
+      properties: {
+        project: PROJECT_ARG,
+        file: {
+          type: 'string',
+          description: 'Project-relative HTML path, such as index.html.',
+        },
+      },
+    },
+    annotations: { ...READ_ANNOTATIONS, title: 'Get design context' },
   },
 ];
 
@@ -2055,6 +2124,9 @@ const PROJECT_OR_RUN_TOOLS = new Set([
   'start_run',
   'get_run',
   'cancel_run',
+  'check_design_system',
+  'renderProbe',
+  'getDesignContext',
 ]);
 
 async function handleMcpToolCall(
@@ -2277,12 +2349,214 @@ async function handleMcpToolCall(
           ),
         );
       }
+      case 'check_design_system': {
+        // Active context is in-memory in the daemon, so the project id still
+        // comes from the existing /api/active channel. The check itself calls
+        // checkProjectDesignSystem — do not POST the check route.
+        const loaded = await loadMcpProjectForLocalTools(baseUrl, args.project, headers);
+        if (!loaded.designSystemId) {
+          return errorResult('project has no active design system');
+        }
+        const tokensCss = await readMcpActiveTokensCss(loaded);
+        const report = await checkProjectDesignSystem({
+          projectId: loaded.id,
+          designSystemId: loaded.designSystemId,
+          projectsRoot: loaded.projectsRoot,
+          ...(loaded.metadata === undefined ? {} : { metadata: loaded.metadata }),
+          tokensCss,
+        });
+        return ok(withActiveEcho(report as unknown as JsonObject, loaded.active, loaded.resolved));
+      }
+      case 'renderProbe': {
+        const loaded = await loadMcpProjectForLocalTools(baseUrl, args.project, headers);
+        const file = typeof args.file === 'string' ? args.file : '';
+        if (file.trim().length === 0) {
+          throw new RenderProbeError('BAD_REQUEST', 'file is required');
+        }
+        const probed = parseRenderProbeArgs(args);
+        const html = await readRenderProbeHtml({
+          projectsRoot: loaded.projectsRoot,
+          projectId: loaded.id,
+          file,
+          ...(loaded.metadata === undefined ? {} : { metadata: loaded.metadata }),
+        });
+        const evaluation = evaluateRenderProbe(html, probed.expression);
+        return ok(withActiveEcho(
+          buildRenderProbeResponse({
+            file,
+            expression: probed.expression.trim(),
+            evaluation,
+            screenshotRequested: probed.screenshotRequested,
+          }) as unknown as JsonObject,
+          loaded.active,
+          loaded.resolved,
+        ));
+      }
+      case 'getDesignContext': {
+        const loaded = await loadMcpProjectForLocalTools(baseUrl, args.project, headers);
+        const file = typeof args.file === 'string' ? args.file.trim() : '';
+        if (!file) throw new Error('file is required (string).');
+        if (!/\.html?$/i.test(file)) {
+          throw new Error('design context requires an HTML file');
+        }
+        const read = await readProjectFile(
+          loaded.projectsRoot,
+          loaded.id,
+          file,
+          loaded.metadata,
+        );
+        return ok(withActiveEcho(
+          extractDesignContext(htmlFromProjectRead(read), { sourcePath: file }) as unknown as JsonObject,
+          loaded.active,
+          loaded.resolved,
+        ));
+      }
       default:
         return errorResult(`unknown tool: ${name}`);
     }
   } catch (err) {
     return errorResult(formatError(err, baseUrl));
   }
+}
+
+interface McpLocalProject {
+  id: string;
+  resolved: ResolvedProject | null;
+  active: ActiveContext | null;
+  designSystemId: string | null;
+  metadata?: unknown;
+  resolvedDir: string;
+  projectsRoot: string;
+}
+
+async function loadMcpProjectForLocalTools(
+  baseUrl: string,
+  projectArg: unknown,
+  headers?: Record<string, string>,
+): Promise<McpLocalProject> {
+  const { id, resolved, active } = await resolveProjectArg(baseUrl, projectArg, headers);
+  const data = await getJson<{
+    project?: { designSystemId?: unknown; metadata?: unknown };
+    designSystemId?: unknown;
+    metadata?: unknown;
+    resolvedDir?: unknown;
+  }>(`${baseUrl}/api/projects/${encodeURIComponent(id)}`, headers);
+  const project = data?.project ?? data;
+  const resolvedDir = typeof data?.resolvedDir === 'string' ? data.resolvedDir : '';
+  if (!resolvedDir) {
+    throw new Error('daemon did not return a project directory for the active project');
+  }
+  const rawDesignSystemId = project && typeof project === 'object'
+    ? project.designSystemId
+    : undefined;
+  const designSystemId = typeof rawDesignSystemId === 'string' && rawDesignSystemId.length > 0
+    ? rawDesignSystemId
+    : null;
+  const metadata = project && typeof project === 'object' ? project.metadata : undefined;
+  return {
+    id,
+    resolved,
+    active,
+    designSystemId,
+    ...(metadata === undefined ? {} : { metadata }),
+    resolvedDir,
+    projectsRoot: projectsRootFromResolvedDir(id, resolvedDir, metadata),
+  };
+}
+
+function projectsRootFromResolvedDir(
+  projectId: string,
+  resolvedDir: string,
+  metadata: unknown,
+): string {
+  const baseDir = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? (metadata as { baseDir?: unknown }).baseDir
+    : undefined;
+  const normalized = path.normalize(resolvedDir);
+  if (typeof baseDir === 'string' && path.isAbsolute(baseDir)) {
+    return path.dirname(normalized);
+  }
+  if (path.basename(normalized) !== projectId) {
+    throw new Error('project directory is not a managed OpenDesign project folder');
+  }
+  return path.dirname(normalized);
+}
+
+function mcpDesignSystemRoots(loaded: McpLocalProject): { builtInRoot: string; userRoot: string } {
+  const projectRoot = resolveProjectRoot(path.dirname(fileURLToPath(import.meta.url)));
+  let resourceRoot: string | null = null;
+  try {
+    resourceRoot = resolveDaemonResourceRoot({
+      safeBases: [
+        projectRoot,
+        resolveProcessResourcesPath(),
+        process.env.OD_INSTALLATION_DIR,
+      ],
+    });
+  } catch {
+    resourceRoot = null;
+  }
+  const inferredUser = inferUserDesignSystemsRoot(loaded);
+  return {
+    builtInRoot: resolveDaemonResourceDir(
+      resourceRoot,
+      'design-systems',
+      path.join(projectRoot, 'design-systems'),
+    ),
+    userRoot: inferredUser ?? path.join(resolveDataDir(process.env.OD_DATA_DIR, projectRoot), 'design-systems'),
+  };
+}
+
+function inferUserDesignSystemsRoot(loaded: McpLocalProject): string | null {
+  const baseDir = loaded.metadata && typeof loaded.metadata === 'object' && !Array.isArray(loaded.metadata)
+    ? (loaded.metadata as { baseDir?: unknown }).baseDir
+    : undefined;
+  if (typeof baseDir === 'string' && path.isAbsolute(baseDir)) return null;
+  const normalized = path.normalize(loaded.resolvedDir);
+  if (path.basename(normalized) !== loaded.id) return null;
+  const projectsDir = path.dirname(normalized);
+  if (path.basename(projectsDir) !== 'projects') return null;
+  return path.join(path.dirname(projectsDir), 'design-systems');
+}
+
+async function readMcpActiveTokensCss(loaded: McpLocalProject): Promise<string | undefined> {
+  if (!loaded.designSystemId) return undefined;
+  const { builtInRoot, userRoot } = mcpDesignSystemRoots(loaded);
+  if (loaded.designSystemId.startsWith('user:')) {
+    return (await readDesignSystemAssets(userRoot, loaded.designSystemId)).tokensCss;
+  }
+  return (
+    (await readDesignSystemAssets(builtInRoot, loaded.designSystemId)).tokensCss
+    ?? (await readDesignSystemAssets(userRoot, loaded.designSystemId)).tokensCss
+  );
+}
+
+function parseRenderProbeArgs(args: McpArgs): { expression: string; screenshotRequested: boolean } {
+  if (args.screenshot !== undefined && typeof args.screenshot !== 'boolean') {
+    throw new RenderProbeError('BAD_REQUEST', 'screenshot must be a boolean');
+  }
+  const expression = typeof args.expression === 'string'
+    ? args.expression
+    : typeof args.eval === 'string'
+      ? args.eval
+      : '';
+  const screenshotRequested = args.screenshot === true;
+  if (expression.trim().length === 0) {
+    if (screenshotRequested) {
+      throw new RenderProbeError(
+        'BAD_REQUEST',
+        `screenshot is unavailable. ${RENDER_PROBE_LIMITATION}`,
+      );
+    }
+    throw new RenderProbeError('BAD_REQUEST', 'expression is required');
+  }
+  return { expression, screenshotRequested };
+}
+
+function htmlFromProjectRead(read: { buffer?: Buffer | string } | null | undefined): string {
+  if (typeof read?.buffer === 'string') return read.buffer;
+  if (Buffer.isBuffer(read?.buffer)) return read.buffer.toString('utf8');
+  throw new Error('project file has no body');
 }
 
 async function writeFile(
