@@ -2322,18 +2322,28 @@ function AppInner() {
   // config has merged so we never overwrite a daemon-stored selection.
   useEffect(() => {
     if (!daemonConfigLoaded || dsLoading) return;
-    if (config.designSystemId) return;
+    if (config.designSystemId && config.defaultDesignSystemId) return;
     if (designSystems.length === 0) return;
     const id =
       designSystems.find((d) => d.id === 'default')?.id ?? designSystems[0]!.id;
     setConfig((prev) => {
-      if (prev.designSystemId) return prev;
-      const next: AppConfig = { ...prev, designSystemId: id };
+      if (prev.designSystemId && prev.defaultDesignSystemId) return prev;
+      const next: AppConfig = {
+        ...prev,
+        designSystemId: prev.designSystemId ?? id,
+        defaultDesignSystemId: prev.defaultDesignSystemId ?? id,
+      };
+      if (
+        next.designSystemId === prev.designSystemId
+        && next.defaultDesignSystemId === prev.defaultDesignSystemId
+      ) {
+        return prev;
+      }
       saveConfig(next);
       void syncConfigToDaemon(next);
       return next;
     });
-  }, [daemonConfigLoaded, dsLoading, designSystems, config.designSystemId]);
+  }, [daemonConfigLoaded, dsLoading, designSystems, config.designSystemId, config.defaultDesignSystemId]);
 
   // One-shot self-healing migration for pets adopted before the
   // overlay learned atlas-row switching. If the stored pet is a
@@ -2812,6 +2822,7 @@ function AppInner() {
       const next = {
         ...latestPersistedConfigRef.current,
         designSystemId,
+        defaultDesignSystemId: designSystemId,
       };
       latestPersistedConfigRef.current = next;
       saveConfig(next);
@@ -5294,7 +5305,7 @@ function AppInner() {
         templates={templates}
         onDeleteTemplate={handleDeleteTemplate}
         promptTemplates={promptTemplates}
-        defaultDesignSystemId={config.designSystemId}
+        defaultDesignSystemId={config.defaultDesignSystemId ?? config.designSystemId ?? null}
         agents={agents}
         agentsLoading={agentsLoading}
         amrLoggedIn={amrLoginStatus?.loggedIn ?? null}

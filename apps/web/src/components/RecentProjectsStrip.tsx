@@ -27,6 +27,15 @@ import {
 } from '../providers/registry';
 import type { DesignSystemSummary, Project, ProjectDisplayStatus, ProjectFile } from '../types';
 import { Icon } from './Icon';
+import {
+  ProjectListControls,
+  ProjectListEmpty,
+  ProjectListStarButton,
+  readStarredProjectIds,
+  toggleStarredProjectId,
+  writeStarredProjectIds,
+  type ProjectListLayout,
+} from './project-list-affordances';
 import { InviteDialog } from './InviteDialog';
 import { STATUS_LABEL_KEYS } from './DesignsTab';
 import { isDesignSystemProject, isPublishedDesignSystemProject } from './design-system-project';
@@ -418,6 +427,24 @@ export function RecentProjectsStrip({
   const fullPageGrid = heading !== undefined || description !== undefined || space !== 'recent';
   const showOwnerFilter = space !== 'drafts';
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [starredIds, setStarredIds] = useState<string[]>(() => readStarredProjectIds());
+  const [starredOnly, setStarredOnly] = useState(false);
+  const layout: ProjectListLayout = view === 'list' ? 'list' : 'thumbnail';
+  function toggleProjectStar(id: string) {
+    setStarredIds((current) => {
+      const next = toggleStarredProjectId(id, current);
+      writeStarredProjectIds(next);
+      return next;
+    });
+  }
+  const listControls = (
+    <ProjectListControls
+      starredOnly={starredOnly}
+      onStarredOnlyChange={setStarredOnly}
+      layout={layout}
+      onLayoutChange={(next) => setView(next === 'list' ? 'list' : 'grid')}
+    />
+  );
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
   const [kindFilter, setKindFilter] = useState<ProjectKindFilter>('all');
   const [sort, setSort] = useState<ProjectSort>('updatedDesc');
@@ -541,12 +568,15 @@ export function RecentProjectsStrip({
           (ownerFilter === 'mine' && creator.ownedBySelf) ||
           (ownerFilter === 'others' && !creator.ownedBySelf);
         const kindMatches = kindFilter === 'all' || projectCardCategory(project) === kindFilter;
-        return ownerMatches && kindMatches;
+        const starredMatches = !starredOnly || starredIds.includes(project.id);
+        return ownerMatches && kindMatches && starredMatches;
       })
       .slice(0, resolvedLimit),
     [
       kindFilter,
       ownerFilter,
+      starredIds,
+      starredOnly,
       projectOwnerMemberIds,
       resolveMember,
       resolvedLimit,
@@ -1011,7 +1041,7 @@ export function RecentProjectsStrip({
   // must keep their header + filter toolbar even when the current owner/type
   // filter matches nothing — collapsing them stranded the user with no way to
   // change the filter back.
-  if (visibleProjects.length === 0 && !fullPageGrid) {
+  if (visibleProjects.length === 0 && !fullPageGrid && !starredOnly) {
     return null;
   }
 
@@ -1561,6 +1591,7 @@ export function RecentProjectsStrip({
                 </div>
               ) : null}
             </div>
+            {listControls}
             <div className="recent-projects__view" role="group" aria-label={t('designs.viewToggleAria')}>
               <button
                 type="button"
@@ -1598,7 +1629,9 @@ export function RecentProjectsStrip({
       ) : (
         <header className="recent-projects__head">
           <h2 className="recent-projects__title">{t('recentProjects.title')}</h2>
-          {onViewAll ? (
+          <div className="recent-projects__controls">
+            {listControls}
+            {onViewAll ? (
             <button
               type="button"
               className="recent-projects__view-all"
@@ -1609,6 +1642,7 @@ export function RecentProjectsStrip({
               <Icon name="chevron-right" size={12} />
             </button>
           ) : null}
+          </div>
         </header>
       )}
       {selectionMode ? (
@@ -1665,9 +1699,14 @@ export function RecentProjectsStrip({
       ) : null}
       <div
         ref={rowRef}
-        className={`recent-projects__row${fullPageGrid ? ` recent-projects__row--${view}` : ''}${menuOpenId ? ' recent-projects__row--menu-open' : ''}${selectionMode ? ' is-selecting' : ''}`}
+        className={`recent-projects__row${fullPageGrid || view === 'list' ? ` recent-projects__row--${view}` : ''}${menuOpenId ? ' recent-projects__row--menu-open' : ''}${selectionMode ? ' is-selecting' : ''}`}
+        data-layout={layout}
+        data-testid="project-list"
         role="list"
       >
+        {visibleProjects.length === 0 ? (
+          <ProjectListEmpty />
+        ) : null}
         {visibleProjects.map(({ project, creator }) => {
           const cover = projectCover(
             project,
@@ -1696,6 +1735,11 @@ export function RecentProjectsStrip({
               className={`recent-projects__card${designSystemProject ? ' is-design-system-project' : ''}${shared ? ' is-shared' : ''}${menuOpenId === project.id ? ' is-menu-open' : ''}${selected ? ' is-selected' : ''}${readonlyShared ? ' is-readonly-shared' : ''}${opening ? ' is-opening' : ''}`}
               data-project-id={project.id}
             >
+              <ProjectListStarButton
+                starred={starredIds.includes(project.id)}
+                name={project.name}
+                onToggle={() => toggleProjectStar(project.id)}
+              />
               {selectionMode ? (
                 <button
                   type="button"

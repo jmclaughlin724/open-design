@@ -745,8 +745,8 @@ clean one; report present in dry-run output.
 - [ ] C3 Resolved design-system manifest cache
 - [ ] D1 Design-system document canvas
 - [ ] D2 Feedback→usage-notes persistence
-- [ ] D3 Composer chips + template starters + start-from-code *(helpers only, UI not wired)*
-- [ ] D4 Workspace-default design system + starred filter + thumbnails *(default id stored; list UI not wired)*
+- [x] D3 Composer chips + template starters + start-from-code
+- [x] D4 Workspace-default design system + starred filter + thumbnails
 - [x] E1 Absorb pipeline (raw HTML ingest + normalization) *(merged)*
 - [x] E2 File-kind detection *(merged)*
 - [ ] E3 Context extraction (design-context.json + MCP tool + skill)

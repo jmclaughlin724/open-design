@@ -82,6 +82,7 @@ import {
   pushRecentLinkedDir,
 } from '../providers/registry';
 import { isOpenDesignHostAvailable, pickHostWorkingDir } from '@open-design/host';
+import type { OpenDesignHostProjectImportSuccess } from '@open-design/host';
 import type {
   DesignSystemSummary,
   Project,
@@ -97,6 +98,14 @@ import {
   requiredInputsAreUserFillable,
 } from '../utils/pluginRequiredInputs';
 import { HomeHero, type ExamplePromptInfo, type HomeHeroHandle } from './HomeHero';
+import {
+  EntryComposerContextChips,
+  entryComposerContextChips,
+  StartFromCodeToggle,
+  TemplateStarterChips,
+} from './entry-composer-context';
+import { DesignTemplateCatalog } from './project-list-affordances';
+import { useOpenFolderImport } from './useOpenFolderImport';
 import { AppWashKineticGrid } from './AppWashKineticGrid';
 import { findChip, HOME_HERO_CHIPS, type HomeHeroChip } from './home-hero/chips';
 import {
@@ -304,6 +313,11 @@ interface Props {
   projectOwnerMemberIds?: ReadonlyMap<string, string>;
   skills?: SkillSummary[];
   skillsLoading?: boolean;
+  designTemplates?: SkillSummary[];
+  agentId?: string | null;
+  agentName?: string | null;
+  onImportFolder?: (baseDir: string) => Promise<void> | void;
+  onImportFolderResponse?: (response: OpenDesignHostProjectImportSuccess) => Promise<void> | void;
   connectors?: ConnectorDetail[];
   promptTemplates?: PromptTemplateSummary[];
   // Personalized first-run starting point (spec §7). Null unless the user just
@@ -516,6 +530,11 @@ export function HomeView({
   projectOwnerMemberIds,
   skills = EMPTY_SKILLS,
   skillsLoading = false,
+  designTemplates = EMPTY_SKILLS,
+  agentId = null,
+  agentName = null,
+  onImportFolder,
+  onImportFolderResponse,
   connectors = EMPTY_CONNECTORS,
   promptTemplates = EMPTY_PROMPT_TEMPLATES,
   recommendation = null,
@@ -640,6 +659,11 @@ export function HomeView({
   const [activeSkill, setActiveSkill] = useState<SkillSummary | null>(null);
   const [activeSkillCatalogScope, setActiveSkillCatalogScope] =
     useState<LocalCatalogScope | null>(null);
+  const folderImport = useOpenFolderImport({
+    skillId: activeSkill?.id ?? null,
+    ...(onImportFolder ? { onImportFolder } : {}),
+    ...(onImportFolderResponse ? { onImportFolderResponse } : {}),
+  });
   const [selectedPluginContexts, setSelectedPluginContexts] = useState<SelectedPluginContext[]>([]);
   const [selectedMcpContexts, setSelectedMcpContexts] = useState<SelectedMcpContext[]>([]);
   const [selectedConnectorContexts, setSelectedConnectorContexts] = useState<SelectedConnectorContext[]>([]);
@@ -3108,6 +3132,30 @@ export function HomeView({
         onPromptChange={handlePromptChange}
         onSubmit={submit}
         onSubmitScenario={submitScenario}
+        composerContextSlot={(
+          <>
+            <EntryComposerContextChips
+              chips={entryComposerContextChips({
+                designSystemId,
+                designSystemTitle: designSystems.find((system) => system.id === designSystemId)?.title ?? null,
+                agentId,
+                agentName,
+                skillId: activeSkill?.id ?? null,
+                skillTitle: activeSkill ? localizeSkillName(locale, activeSkill) : null,
+              })}
+            />
+            <TemplateStarterChips
+              templates={designTemplates}
+              onPick={(template, starterPrompt) => {
+                useSkill(template, starterPrompt);
+              }}
+            />
+            <StartFromCodeToggle
+              available={folderImport.available}
+              onOpen={async () => (await folderImport.openFolder()) === 'imported'}
+            />
+          </>
+        )}
         sessionMode={sessionMode}
         onSessionModeChange={setSessionMode}
         submitting={sending}
@@ -3263,6 +3311,8 @@ export function HomeView({
         {...(onRenameProject ? { onRename: onRenameProject } : {})}
       />
       )}
+
+      <DesignTemplateCatalog templates={designTemplates} />
 
       <AnimatePresence>
         {detailsRecord && detailsTemplate ? (

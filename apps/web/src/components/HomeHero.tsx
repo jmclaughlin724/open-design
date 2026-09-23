@@ -253,6 +253,9 @@ interface Props {
   // the composer card — before the template section — so a brand-new user sees
   // their recommended entry without scrolling.
   recommendationSlot?: ReactNode;
+  // Design system / agent / skill chips, template starters, and start-from-code.
+  // Rendered inside the composer card so they are visible before first submit.
+  composerContextSlot?: ReactNode;
 }
 
 type HomeMentionTab = 'all' | 'files' | 'plugins' | 'skills' | 'mcp' | 'connectors';
@@ -378,6 +381,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     onStartBlankProject,
     executionSwitcher,
     recommendationSlot,
+    composerContextSlot,
   },
   ref,
 ) {
@@ -1312,6 +1316,11 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
       {/* #5517 wraps the input card + workdir row into one visible composer
           card so they read as a single surface. */}
       <div className="home-hero__composer-card">
+      {composerContextSlot ? (
+        <div className="home-hero__context-slot" data-testid="home-hero-context-slot">
+          {composerContextSlot}
+        </div>
+      ) : null}
       <div
         className={`home-hero__input-card${
           authoringLayoutActive ? ' home-hero__input-card--compact-authoring' : ''

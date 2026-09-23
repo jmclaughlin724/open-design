@@ -90,6 +90,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   agentId: null,
   skillId: null,
   designSystemId: null,
+  defaultDesignSystemId: null,
   onboardingCompleted: false,
   theme: FORCED_APP_THEME,
   accentColor: DEFAULT_ACCENT_COLOR,
@@ -1084,6 +1085,9 @@ export function mergeDaemonConfig(
   if (daemonConfig.designSystemId !== undefined) {
     next.designSystemId = daemonConfig.designSystemId;
   }
+  if (daemonConfig.defaultDesignSystemId !== undefined) {
+    next.defaultDesignSystemId = daemonConfig.defaultDesignSystemId;
+  }
   if (daemonConfig.agentModels) {
     next.agentModels = {
       ...(next.agentModels ?? {}),
@@ -1272,6 +1276,7 @@ export async function syncConfigToDaemon(
     agentCliEnvIntent: config.agentCliEnvIntent,
     skillId: config.skillId,
     designSystemId: config.designSystemId,
+    defaultDesignSystemId: config.defaultDesignSystemId ?? null,
     disabledSkills: config.disabledSkills,
     disabledDesignSystems: config.disabledDesignSystems,
     orbit: normalizeOrbit(config.orbit),
