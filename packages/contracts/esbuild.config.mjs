@@ -14,6 +14,7 @@ await build({
     "./src/api/providerModels.ts",
     "./src/api/reasoningExecution.ts",
     "./src/api/research.ts",
+    "./src/api/targets.ts",
     "./src/runtime/deck-stage-fallback.ts",
     "./src/runtime/preview-observability.ts",
     "./src/runtime/preview-guards.ts",

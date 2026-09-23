@@ -92,6 +92,7 @@ import { connectorService } from '../../connectors/service.js';
 import type { RouteDeps } from '../../server-context.js';
 import { listSkills } from '../../skills.js';
 import { isSafeId } from '../../projects.js';
+import { sameConnectedTarget } from '../../targets/parse.js';
 import {
   ensureTeamProjectCommentConversations,
   getFirstProjectConversation,
@@ -1776,6 +1777,7 @@ function cloneProjectMetadataForDuplicate(sourceProject: any): Record<string, un
   delete sourceMetadata.baseDir;
   delete sourceMetadata.projectLocationId;
   delete sourceMetadata.fromTrustedPicker;
+  delete sourceMetadata.connectedTarget;
   delete sourceMetadata.orchestratorWorkspace;
   return {
     ...sourceMetadata,
@@ -3615,6 +3617,12 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             'fromTrustedPicker can only be set via POST /api/import/folder',
           );
         }
+        if ('connectedTarget' in metadata) {
+          return sendApiError(
+            res, 400, 'BAD_REQUEST',
+            'connectedTarget can only be set via POST /api/projects/:id/target',
+          );
+        }
         if ('orchestratorWorkspace' in metadata) {
           return sendApiError(
             res, 400, 'BAD_REQUEST',
@@ -4814,6 +4822,14 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             'metadata cannot be cleared while exampleBinding is daemon-owned',
           );
         }
+        if (existing?.metadata?.connectedTarget) {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'metadata cannot be cleared while connectedTarget is daemon-owned',
+          );
+        }
         if (existing?.metadata?.baseDir) {
           return sendApiError(
             res,
@@ -4881,6 +4897,15 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           return sendApiError(
             res, 400, 'BAD_REQUEST',
             'fromTrustedPicker can only be set via POST /api/import/folder',
+          );
+        }
+        if (
+          'connectedTarget' in patch.metadata
+          && !sameConnectedTarget(patch.metadata.connectedTarget, existingMeta?.connectedTarget)
+        ) {
+          return sendApiError(
+            res, 400, 'BAD_REQUEST',
+            'connectedTarget can only be changed via POST/DELETE /api/projects/:id/target',
           );
         }
         if ('orchestratorWorkspace' in patch.metadata) {
@@ -4976,6 +5001,12 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           patch.metadata = {
             ...patch.metadata,
             exampleBinding: existingMeta.exampleBinding,
+          };
+        }
+        if (existingMeta?.connectedTarget) {
+          patch.metadata = {
+            ...patch.metadata,
+            connectedTarget: existingMeta.connectedTarget,
           };
         }
       }
