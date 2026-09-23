@@ -12,6 +12,7 @@ await build({
     "./src/api/finalize.ts",
     "./src/api/handoff.ts",
     "./src/api/absorbed-files.ts",
+    "./src/api/design-context.ts",
     "./src/api/providerModels.ts",
     "./src/api/reasoningExecution.ts",
     "./src/api/research.ts",
