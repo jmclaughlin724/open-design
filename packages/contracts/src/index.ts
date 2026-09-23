@@ -28,6 +28,7 @@ export * from './api/files.js';
 export * from './api/absorbed-files.js';
 export * from './api/preview-tokens.js';
 export * from './api/targets.js';
+export * from './api/design-system-check.js';
 export * from './api/figma.js';
 export * from './api/host-tools.js';
 export * from './api/finalize.js';
