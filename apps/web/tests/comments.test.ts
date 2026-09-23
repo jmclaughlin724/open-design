@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildBoardCommentAttachments,
   buildVisualAnnotationAttachment,
+  commentAnchorWatchList,
   commentSnapshotOverlayEqual,
   commentVisibleOnDeckSlide,
   commentsToAttachments,
@@ -9,6 +10,7 @@ import {
   liveCommentTargetMapsEqual,
   liveSnapshotForComment,
   resolveCommentAnchor,
+  acceptCommentAnchorMoved,
   mergeAttachedComments,
   mergePreviewCommentAttachments,
   messageContentWithCommentAttachments,
@@ -621,5 +623,56 @@ describe('queuedSlideNavTarget', () => {
     expect(
       queuedSlideNavTarget([commentAttachment({ slideIndex: -1 })]),
     ).toBeNull();
+  });
+});
+
+describe('acceptCommentAnchorMoved', () => {
+  function snap(position: { x: number; y: number; width: number; height: number }): PreviewCommentSnapshot {
+    return {
+      filePath: 'index.html',
+      elementId: 'hero',
+      selector: '[data-od-id="hero"]',
+      label: 'h1',
+      text: 'Title',
+      position,
+      htmlHint: '<h1 data-od-id="hero">',
+    };
+  }
+
+  const moved = {
+    type: 'anchorMoved',
+    elementId: 'hero',
+    selector: '[data-od-id="hero"]',
+    rect: { x: 80, y: 90, width: 100, height: 50 },
+  };
+
+  it('ignores anchorMoved from a frame that is not the preview', () => {
+    const frame = { name: 'preview' };
+    const targets = new Map([['hero', snap({ x: 10, y: 20, width: 30, height: 40 })]]);
+
+    expect(acceptCommentAnchorMoved({
+      data: moved,
+      source: { name: 'other' },
+      frame,
+      targets,
+    })).toBeNull();
+    expect(targets.get('hero')?.position).toEqual({ x: 10, y: 20, width: 30, height: 40 });
+  });
+
+  it('re-anchors a pin when the preview frame reports a new rect', () => {
+    const frame = { name: 'preview' };
+    const targets = new Map([['hero', snap({ x: 10, y: 20, width: 30, height: 40 })]]);
+
+    const next = acceptCommentAnchorMoved({ data: moved, source: frame, frame, targets });
+
+    expect(next?.get('hero')?.position).toEqual({ x: 80, y: 90, width: 100, height: 50 });
+    expect(targets.get('hero')?.position).toEqual({ x: 10, y: 20, width: 30, height: 40 });
+  });
+
+  it('does not watch free pins', () => {
+    expect(commentAnchorWatchList([
+      comment({ elementId: 'hero', selector: '[data-od-id="hero"]' }),
+      comment({ id: 'pin', elementId: 'pin-abc', selector: '[data-od-pin="pin-abc"]' }),
+    ])).toEqual([{ elementId: 'hero', selector: '[data-od-id="hero"]' }]);
   });
 });

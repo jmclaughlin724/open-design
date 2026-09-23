@@ -17,6 +17,8 @@ import {
   previewHtmlHasLoadTimeLocationNavigation,
 } from '@open-design/contracts/runtime/preview-guards';
 import {
+  buildCommentAnchorBridge,
+  COMMENT_ANCHOR_BRIDGE_MARKER,
   endOfTag,
   findRealElementRange,
   findRealTagEnd,
@@ -1521,7 +1523,11 @@ function injectUrlPreviewBridge(
     return injectBeforeBodyClose(html, 'data-od-url-scroll-bridge', URL_PREVIEW_SCROLL_BRIDGE);
   }
   if (bridge === 'selection') {
-    return injectBeforeBodyClose(html, 'data-od-url-selection-bridge', URL_PREVIEW_SELECTION_BRIDGE);
+    return injectBeforeBodyClose(
+      injectBeforeBodyClose(html, 'data-od-url-selection-bridge', URL_PREVIEW_SELECTION_BRIDGE),
+      COMMENT_ANCHOR_BRIDGE_MARKER,
+      buildCommentAnchorBridge(),
+    );
   }
   return injectBeforeBodyClose(html, 'data-od-url-snapshot-bridge', URL_PREVIEW_SNAPSHOT_BRIDGE);
 }

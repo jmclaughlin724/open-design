@@ -1,3 +1,5 @@
+import type { CommentAnchorMovedMessage } from '@open-design/contracts/runtime/html-injection-points';
+import { parseCommentAnchorMovedMessage } from '@open-design/contracts/runtime/html-injection-points';
 import type {
   ChatCommentAttachment,
   ChatCommentSelectionKind,
@@ -215,6 +217,128 @@ export function overlayBoundsFromSnapshot(
     width: Math.max(1, position.width * safeScale),
     height: Math.max(1, position.height * safeScale),
   };
+}
+
+/** Element ids the preview observer should measure. Free pins have no DOM node. */
+export function commentAnchorWatchList(
+  comments: readonly Pick<PreviewComment, 'elementId' | 'selector' | 'podMembers'>[],
+): Array<{ elementId: string; selector: string }> {
+  const seen = new Set<string>();
+  const anchors: Array<{ elementId: string; selector: string }> = [];
+  const push = (elementId: string | undefined, selector: string | undefined) => {
+    const id = String(elementId ?? '').trim();
+    if (!id || id.startsWith('pin-') || seen.has(id)) return;
+    seen.add(id);
+    anchors.push({ elementId: id, selector: String(selector ?? '').slice(0, 1024) });
+  };
+  for (const comment of comments) {
+    push(comment.elementId, comment.selector);
+    for (const member of comment.podMembers ?? []) push(member.elementId, member.selector);
+  }
+  return anchors;
+}
+
+function recomputePodBounds(snapshot: PreviewCommentSnapshot): PreviewCommentSnapshot {
+  if (snapshot.selectionKind !== 'pod' || !snapshot.podMembers?.length) return snapshot;
+  let left = Number.POSITIVE_INFINITY;
+  let top = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const member of snapshot.podMembers) {
+    const position = normalizePosition(member.position);
+    if (position.width <= 0 || position.height <= 0) continue;
+    left = Math.min(left, position.x);
+    top = Math.min(top, position.y);
+    right = Math.max(right, position.x + position.width);
+    bottom = Math.max(bottom, position.y + position.height);
+  }
+  if (!Number.isFinite(left)) return snapshot;
+  return {
+    ...snapshot,
+    position: {
+      x: Math.round(left),
+      y: Math.round(top),
+      width: Math.max(1, Math.round(right - left)),
+      height: Math.max(1, Math.round(bottom - top)),
+    },
+  };
+}
+
+function positionMoved(
+  current: PreviewCommentSnapshot['position'],
+  next: PreviewCommentSnapshot['position'],
+): boolean {
+  return current.x !== next.x || current.y !== next.y || current.width !== next.width || current.height !== next.height;
+}
+
+/** Move one overlay snapshot onto the rect the preview just measured. */
+export function reanchorCommentSnapshot(
+  snapshot: PreviewCommentSnapshot | null,
+  message: CommentAnchorMovedMessage,
+): PreviewCommentSnapshot | null {
+  if (!snapshot || !isValidCommentOverlayPosition(message.rect)) return snapshot;
+  const position = normalizePosition(message.rect);
+  let changed = false;
+  let next = snapshot;
+  if (snapshot.elementId === message.elementId && positionMoved(normalizePosition(snapshot.position), position)) {
+    next = {
+      ...next,
+      position,
+      selector: message.selector || next.selector,
+    };
+    changed = true;
+  }
+  if (snapshot.podMembers?.some((member) => member.elementId === message.elementId)) {
+    const podMembers = (next.podMembers ?? []).map((member) => {
+      if (member.elementId !== message.elementId) return member;
+      if (!positionMoved(normalizePosition(member.position), position)) return member;
+      changed = true;
+      return {
+        ...member,
+        position,
+        selector: message.selector || member.selector,
+      };
+    });
+    if (changed) next = recomputePodBounds({ ...next, podMembers });
+  }
+  return changed ? next : snapshot;
+}
+
+/**
+ * Apply one `anchorMoved` rect to the live pin map. Returns null when the
+ * message does not move a pin the host is already showing, so a repeated
+ * rect does not re-render the overlay.
+ */
+export function applyCommentAnchorMoved(
+  targets: Map<string, PreviewCommentSnapshot>,
+  message: CommentAnchorMovedMessage,
+): Map<string, PreviewCommentSnapshot> | null {
+  if (!isValidCommentOverlayPosition(message.rect)) return null;
+  let changed = false;
+  const next = new Map<string, PreviewCommentSnapshot>();
+  for (const [id, snapshot] of targets) {
+    const patched = reanchorCommentSnapshot(snapshot, message);
+    if (!patched) continue;
+    if (patched !== snapshot) changed = true;
+    next.set(id, patched);
+  }
+  return changed ? next : null;
+}
+
+/**
+ * Host-side gate for a preview `anchorMoved` post. The sending frame must be
+ * the preview iframe; a sibling frame posting the same shape cannot move pins.
+ */
+export function acceptCommentAnchorMoved(input: {
+  data: unknown;
+  source: unknown;
+  frame: unknown;
+  targets: Map<string, PreviewCommentSnapshot>;
+}): Map<string, PreviewCommentSnapshot> | null {
+  if (input.source == null || input.frame == null || input.source !== input.frame) return null;
+  const message = parseCommentAnchorMovedMessage(input.data);
+  if (!message) return null;
+  return applyCommentAnchorMoved(input.targets, message);
 }
 
 export function liveSnapshotForComment(

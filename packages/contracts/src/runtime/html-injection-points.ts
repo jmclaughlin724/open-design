@@ -888,3 +888,249 @@ export const HTML_TAG_PATTERNS = {
   baseOpen: /<base(?=[\t\n\f\r />])/i,
   titleOpen: /<title(?=[\t\n\f\r >])/i,
 } as const;
+
+/**
+ * Comment-anchor bridge.
+ *
+ * Host pins are painted from the last rect the preview reported. A DOM shift
+ * that is not a full target re-walk — a class or style move, a node relocated
+ * under a new parent — leaves that rect stale. This script is the injected
+ * observer: it measures comment-anchored elements and posts `anchorMoved`
+ * with the new rect so the host can re-anchor the pin.
+ *
+ * Browser APIs stay inside the serialized script. This module does not touch
+ * `window` or `document`, so daemon and web inject the same bytes.
+ */
+export const COMMENT_ANCHOR_BRIDGE_MARKER = 'data-od-comment-anchor-bridge';
+export const COMMENT_ANCHOR_MOVED_MESSAGE_TYPE = 'anchorMoved';
+export const COMMENT_ANCHOR_WATCH_MESSAGE_TYPE = 'od:comment-anchor-watch';
+export const COMMENT_ANCHOR_MEASURE_LIMIT = 200;
+
+const COMMENT_ANCHOR_ID_LIMIT = 512;
+const COMMENT_ANCHOR_SELECTOR_LIMIT = 1024;
+const COMMENT_ANCHOR_COORDINATE_LIMIT = 1_000_000;
+
+export interface CommentAnchorRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface CommentAnchorMovedMessage {
+  type: typeof COMMENT_ANCHOR_MOVED_MESSAGE_TYPE;
+  elementId: string;
+  selector: string;
+  rect: CommentAnchorRect;
+}
+
+function boundedAnchorText(value: unknown, limit: number): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value.replace(/\s+/g, ' ').trim().slice(0, limit);
+  return text;
+}
+
+function boundedAnchorCoordinate(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  return Math.max(
+    -COMMENT_ANCHOR_COORDINATE_LIMIT,
+    Math.min(COMMENT_ANCHOR_COORDINATE_LIMIT, Math.round(value)),
+  );
+}
+
+/** Narrow an untrusted preview post into a bounded rect the host may apply. */
+export function parseCommentAnchorMovedMessage(
+  value: unknown,
+): CommentAnchorMovedMessage | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.type !== COMMENT_ANCHOR_MOVED_MESSAGE_TYPE) return null;
+  const elementId = boundedAnchorText(candidate.elementId, COMMENT_ANCHOR_ID_LIMIT);
+  if (!elementId) return null;
+  const selector = candidate.selector === undefined
+    ? ''
+    : boundedAnchorText(candidate.selector, COMMENT_ANCHOR_SELECTOR_LIMIT);
+  if (selector === null) return null;
+  if (!candidate.rect || typeof candidate.rect !== 'object') return null;
+  const rect = candidate.rect as Record<string, unknown>;
+  const x = boundedAnchorCoordinate(rect.x);
+  const y = boundedAnchorCoordinate(rect.y);
+  const width = boundedAnchorCoordinate(rect.width);
+  const height = boundedAnchorCoordinate(rect.height);
+  if (x === null || y === null || width === null || height === null) return null;
+  return {
+    type: COMMENT_ANCHOR_MOVED_MESSAGE_TYPE,
+    elementId,
+    selector,
+    rect: { x, y, width, height },
+  };
+}
+
+/**
+ * Script injected into srcdoc and URL previews. A mutation observer measures
+ * comment-anchored elements and posts `{ type: 'anchorMoved', rect }` to the
+ * host. The host's watch list (when present) is the set of anchors; until
+ * that list arrives, annotated `data-od-id` / `data-screen-label` nodes are
+ * the fallback so a move is not lost on the first frame.
+ */
+export function buildCommentAnchorBridge(): string {
+  return `<script ${COMMENT_ANCHOR_BRIDGE_MARKER}>(function(){
+  if (window.__odCommentAnchorBridge) return;
+  window.__odCommentAnchorBridge = true;
+  var TYPE = ${JSON.stringify(COMMENT_ANCHOR_MOVED_MESSAGE_TYPE)};
+  var WATCH = ${JSON.stringify(COMMENT_ANCHOR_WATCH_MESSAGE_TYPE)};
+  var MAX = ${COMMENT_ANCHOR_MEASURE_LIMIT};
+  var registered = [];
+  var watchInstalled = false;
+  var pending = false;
+  var last = Object.create(null);
+  function cssEscape(value){
+    var text = String(value == null ? '' : value);
+    try {
+      if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(text);
+    } catch (err) {}
+    return text.split('"').join('');
+  }
+  function trimText(value, limit){
+    var text = String(value == null ? '' : value);
+    var start = 0;
+    var end = text.length;
+    while (start < end && text.charCodeAt(start) <= 32) start += 1;
+    while (end > start && text.charCodeAt(end - 1) <= 32) end -= 1;
+    if (end - start > limit) end = start + limit;
+    return text.slice(start, end);
+  }
+  function connected(el){
+    if (!el || el.nodeType !== 1) return false;
+    if (typeof el.isConnected === 'boolean') return el.isConnected;
+    return !!(document.documentElement && document.documentElement.contains(el));
+  }
+  function resolve(anchor){
+    var el = null;
+    if (anchor.selector) {
+      try { el = document.querySelector(anchor.selector); } catch (err) { el = null; }
+    }
+    if (!connected(el) && anchor.elementId) {
+      var id = cssEscape(anchor.elementId);
+      try {
+        el = document.querySelector('[data-od-id="' + id + '"], [data-screen-label="' + id + '"]');
+      } catch (err) { el = null; }
+    }
+    return connected(el) ? el : null;
+  }
+  function pushAnchor(items, seen, elementId, selector){
+    if (!elementId || seen[elementId] || items.length >= MAX) return;
+    seen[elementId] = true;
+    items.push({
+      elementId: String(elementId).slice(0, 512),
+      selector: selector ? String(selector).slice(0, 1024) : ''
+    });
+  }
+  function anchorsToMeasure(){
+    var items = [];
+    var seen = Object.create(null);
+    var i;
+    if (watchInstalled) {
+      for (i = 0; i < registered.length; i++) {
+        pushAnchor(items, seen, registered[i].elementId, registered[i].selector);
+      }
+      return items;
+    }
+    var nodes = document.querySelectorAll('[data-od-id], [data-screen-label]');
+    for (i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      var id = node.getAttribute('data-od-id') || node.getAttribute('data-screen-label');
+      if (!id) continue;
+      var selector = node.hasAttribute('data-od-id')
+        ? '[data-od-id="' + cssEscape(id) + '"]'
+        : '[data-screen-label="' + cssEscape(id) + '"]';
+      pushAnchor(items, seen, id, selector);
+    }
+    return items;
+  }
+  function readRect(el){
+    if (!el || typeof el.getBoundingClientRect !== 'function') return null;
+    var rect;
+    try { rect = el.getBoundingClientRect(); } catch (err) { return null; }
+    if (!rect) return null;
+    var x = rect.x;
+    var y = rect.y;
+    if (typeof x !== 'number' || !isFinite(x)) x = rect.left;
+    if (typeof y !== 'number' || !isFinite(y)) y = rect.top;
+    var width = rect.width;
+    var height = rect.height;
+    if (typeof x !== 'number' || typeof y !== 'number' || typeof width !== 'number' || typeof height !== 'number') return null;
+    if (!isFinite(x) || !isFinite(y) || !isFinite(width) || !isFinite(height)) return null;
+    return { x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) };
+  }
+  function sameRect(a, b){
+    return !!a && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+  }
+  function flush(){
+    pending = false;
+    var anchors = anchorsToMeasure();
+    for (var i = 0; i < anchors.length; i++) {
+      var anchor = anchors[i];
+      var el = resolve(anchor);
+      var next = el ? readRect(el) : null;
+      if (!next || !(next.width > 0) || !(next.height > 0)) continue;
+      var prev = last[anchor.elementId];
+      last[anchor.elementId] = next;
+      if (sameRect(prev, next)) continue;
+      try {
+        window.parent.postMessage({
+          type: TYPE,
+          elementId: anchor.elementId,
+          selector: anchor.selector,
+          rect: next
+        }, '*');
+      } catch (err) {}
+    }
+  }
+  function schedule(){
+    if (pending) return;
+    pending = true;
+    window.setTimeout(flush, 0);
+  }
+  window.addEventListener('message', function(ev){
+    if (!ev || ev.source !== window.parent) return;
+    var data = ev.data;
+    if (!data || data.type !== WATCH || !Array.isArray(data.anchors)) return;
+    var next = [];
+    var seen = Object.create(null);
+    for (var i = 0; i < data.anchors.length; i++) {
+      var item = data.anchors[i];
+      if (!item || typeof item.elementId !== 'string') continue;
+      var elementId = trimText(item.elementId, 512);
+      if (!elementId || elementId.indexOf('pin-') === 0 || seen[elementId]) continue;
+      seen[elementId] = true;
+      next.push({
+        elementId: elementId,
+        selector: typeof item.selector === 'string' ? item.selector.slice(0, 1024) : ''
+      });
+      if (next.length >= MAX) break;
+    }
+    registered = next;
+    watchInstalled = true;
+    schedule();
+  });
+  var root = document.documentElement || document;
+  if (typeof MutationObserver === 'function' && root) {
+    var observer = new MutationObserver(schedule);
+    try {
+      observer.observe(root, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ['style', 'class', 'hidden']
+      });
+    } catch (err) {
+      try { observer.observe(root, { subtree: true, childList: true }); } catch (err2) {}
+    }
+  }
+  window.addEventListener('resize', schedule);
+  document.addEventListener('scroll', schedule, true);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule);
+  schedule();
+})();</script>`;
+}
