@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildCommentAnchorBridge,
+  COMMENT_ANCHOR_BRIDGE_MARKER,
+  COMMENT_ANCHOR_MOVED_MESSAGE_TYPE,
   endOfTag,
   findRealTagEnd,
   findRealTagOffset,
   HTML_TAG_PATTERNS,
+  parseCommentAnchorMovedMessage,
 } from '../src/runtime/html-injection-points';
 
 // Unit coverage lives here, parser-free, so contracts keeps its dependency-less
@@ -269,5 +273,37 @@ describe('HTML_TAG_PATTERNS', () => {
     const html = '<!doctype html><html><head><base href="/x/"></head><body></body></html>';
 
     expect(findRealTagOffset(html, HTML_TAG_PATTERNS.baseOpen)).toBe(html.indexOf('<base '));
+  });
+});
+
+describe('comment-anchor bridge', () => {
+  it('posts anchorMoved from a mutation observer that reads element rects', () => {
+    const script = buildCommentAnchorBridge();
+
+    expect(script).toContain(COMMENT_ANCHOR_BRIDGE_MARKER);
+    expect(script).toContain('MutationObserver');
+    expect(script).toContain('getBoundingClientRect');
+    expect(script).toContain(COMMENT_ANCHOR_MOVED_MESSAGE_TYPE);
+    expect(script).toContain('window.parent.postMessage');
+  });
+
+  it('accepts a bounded anchorMoved rect and rejects a foreign shape', () => {
+    expect(parseCommentAnchorMovedMessage({
+      type: 'anchorMoved',
+      elementId: ' hero ',
+      selector: '[data-od-id="hero"]',
+      rect: { x: 10.4, y: 20.2, width: 30.8, height: 40.1 },
+    })).toEqual({
+      type: 'anchorMoved',
+      elementId: 'hero',
+      selector: '[data-od-id="hero"]',
+      rect: { x: 10, y: 20, width: 31, height: 40 },
+    });
+    expect(parseCommentAnchorMovedMessage({ type: 'od:comment-targets', targets: [] })).toBeNull();
+    expect(parseCommentAnchorMovedMessage({
+      type: 'anchorMoved',
+      elementId: 'hero',
+      rect: { x: Number.NaN, y: 1, width: 2, height: 3 },
+    })).toBeNull();
   });
 });
