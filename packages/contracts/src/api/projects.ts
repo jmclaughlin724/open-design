@@ -528,6 +528,7 @@ export interface ProjectDesignTokenSuggestion {
   line: number;
   matchReason: string;
   score: number;
+  usage?: string;
 }
 
 export interface ProjectDesignTokenSuggestionsResponse {

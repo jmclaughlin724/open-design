@@ -62,6 +62,8 @@ export * from './runtime/od-next-capability.js';
 export * from './design-systems/components-manifest.js';
 export * from './design-systems/derived-token-outputs.js';
 export * from './design-systems/token-schema.js';
+export * from './design-systems/document-sections.js';
+export * from './design-systems/token-semantics.js';
 export * from './sse/common.js';
 export * from './sse/chat.js';
 export * from './sse/collab.js';

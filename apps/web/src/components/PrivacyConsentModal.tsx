@@ -1,3 +1,4 @@
+import type { ReactElement } from 'react';
 import { useAnalytics } from '../analytics/provider';
 import { trackPrivacyModalClick } from '../analytics/events';
 import { useT } from '../i18n';
@@ -28,7 +29,7 @@ interface Props {
  * downstream telemetry gate keys off `privacyDecisionAt`, so the banner
  * records a concrete privacy decision instead of a dismiss-only state.
  */
-export function PrivacyConsentModal({ onShare, onDecline }: Props): JSX.Element {
+export function PrivacyConsentModal({ onShare, onDecline }: Props): ReactElement {
   const t = useT();
   const analytics = useAnalytics();
   return (

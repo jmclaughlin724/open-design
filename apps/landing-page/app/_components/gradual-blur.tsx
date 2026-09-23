@@ -18,7 +18,7 @@
  * progressive blur at the bottom edge while the headline stays crisp.
  */
 
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 
 type Position = 'top' | 'bottom' | 'left' | 'right';
 type Curve = 'linear' | 'bezier' | 'ease-in' | 'ease-out' | 'ease-in-out';
@@ -73,7 +73,7 @@ export function GradualBlur({
   const direction = getGradientDirection(position);
 
   // Layer generation mirrors the upstream `blurDivs` loop exactly.
-  const layers = [] as JSX.Element[];
+  const layers = [] as ReactElement[];
   for (let i = 1; i <= divCount; i++) {
     const progress = curveFunc(i / divCount);
     const blurValue = exponential

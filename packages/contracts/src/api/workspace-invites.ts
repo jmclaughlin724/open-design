@@ -4,6 +4,7 @@ import type {
   WorkspaceLifecycleState,
   WorkspaceMemberStatus,
 } from './collab.js';
+import { parseUrl, searchParamsToString } from '../url-parse.js';
 
 // Workspace-invite acceptance contract (the invitee client flow).
 //
@@ -315,13 +316,13 @@ export interface InviteDeeplinkPayload {
  * constructor used for the fallback path and round-trip tests.
  */
 export function buildInviteDeeplink(payload: InviteDeeplinkPayload): string {
-  const params = new URLSearchParams({
+  const params = searchParamsToString({
     workspace_id: payload.workspaceId,
     member_id: payload.memberId,
     invite_id: payload.inviteId,
     nonce: payload.nonce,
   });
-  return `${INVITE_DEEPLINK_SCHEME}://${INVITE_DEEPLINK_PATH}?${params.toString()}`;
+  return `${INVITE_DEEPLINK_SCHEME}://${INVITE_DEEPLINK_PATH}?${params}`;
 }
 
 /**
@@ -331,9 +332,9 @@ export function buildInviteDeeplink(payload: InviteDeeplinkPayload): string {
  * params (e.g. a signature B appends) are ignored, not rejected.
  */
 export function parseInviteDeeplink(url: string): InviteDeeplinkPayload | null {
-  let parsed: URL;
+  let parsed: ReturnType<typeof parseUrl>;
   try {
-    parsed = new URL(url);
+    parsed = parseUrl(url);
   } catch {
     return null;
   }

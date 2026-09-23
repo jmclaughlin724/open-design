@@ -11,6 +11,7 @@ import {
   type DesignTokenContractReport,
 } from './token-contract.js';
 import { extractCssCustomProperties } from './token-evidence.js';
+import { warnUnresolvedTokenSemantics } from './token-semantics.js';
 
 export type LocalDesignSystemImportResult = {
   id: string;
@@ -147,6 +148,10 @@ export async function importLocalDesignSystemProject(
   ];
   const designMd = renderDesignMd(id, displayName, scan);
   const tokenContract = buildDesignTokenContract({ sourceTokens: scan.cssVariables, generatedAt: now });
+  warnUnresolvedTokenSemantics(
+    tokenContract.bindings.map((binding) => ({ name: binding.name, ...(binding.semantics ? { semantics: binding.semantics } : {}) })),
+    id,
+  );
   const tokensCss = tokenContract.tokensCss;
   const componentsHtml = renderComponentsHtml(displayName, tokensCss);
   const tokenContractReport = buildReportWithSelfCheck(

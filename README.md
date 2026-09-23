@@ -578,7 +578,7 @@ Plugin registry endpoint: `GET /api/plugins`. Directory overview → [`plugins/R
 
 | Layer | Stack |
 |---|---|
-| Frontend | Next.js 16 App Router + React 18 + TypeScript |
+| Frontend | Next.js 16 App Router + React 19.3 + TypeScript |
 | Daemon | Node 24 · Express · SSE streaming · `better-sqlite3` |
 | Storage | Before changing or documenting daemon storage paths, you MUST read `AGENTS.md` → **Daemon data directory contract**. This README MUST NOT restate it. |
 | Preview | Filesystem runs render canonical project files; BYOK/plain-API runs parse one complete `<artifact>` block into a sandboxed `srcdoc` iframe |

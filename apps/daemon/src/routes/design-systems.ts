@@ -29,6 +29,7 @@ import {
   type WorkspaceResourceAccessInput,
 } from '../collab/workspace-resource-mutation.js';
 import type { Project, ProjectFile } from '@open-design/contracts';
+import { parseDesignSystemDocument } from '../design-systems/document-sections.js';
 
 type DbHandle = ReturnType<typeof openDatabase>;
 
@@ -698,7 +699,8 @@ export function registerDesignSystemRoutes(
       // enforces, instead of each surface re-deriving (or forgetting to
       // derive) its own verdict.
       const canMutate = await canMutateUserDesignSystem(storage.root, req.params.id, req);
-      const detail = { ...summary, body, canMutate, ...(packageInfo ? { packageInfo } : {}) };
+      const document = parseDesignSystemDocument(body);
+      const detail = { ...summary, body, canMutate, document, ...(packageInfo ? { packageInfo } : {}) };
       res.json({ ...detail, designSystem: detail });
     } catch (err) {
       res.status(500).json({ error: String(err) });

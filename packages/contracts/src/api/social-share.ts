@@ -1,3 +1,5 @@
+import { parseUrl } from '../url-parse';
+
 export const OPEN_DESIGN_GITHUB_REPO_URL = 'https://github.com/nexu-io/open-design';
 
 export type SocialShareTargetKind = 'open-design-repo' | 'project-html';
@@ -90,7 +92,7 @@ function cleanLocale(value: unknown): string {
 export function normalizeSocialShareUrl(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   try {
-    const parsed = new URL(value.trim());
+    const parsed = parseUrl(value.trim());
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
     return parsed.href;
   } catch {

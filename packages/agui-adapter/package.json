@@ -3,7 +3,7 @@
   "version": "0.5.0",
   "private": true,
   "type": "module",
-  "description": "Pure-TS bidirectional adapter between OpenDesign's PersistedAgentEvent / GenUIEvent / PluginPipelineStageEvent union and the AG-UI canonical event protocol (see https://github.com/CopilotKit/CopilotKit). No node:fs imports — daemon emits, web/CopilotKit consumes.",
+  "description": "Pure-TS bidirectional adapter between OpenDesign's PersistedAgentEvent / GenUIEvent / PluginPipelineStageEvent union and the AG-UI canonical event protocol (see https://github.com/CopilotKit/CopilotKit). No node:fs imports \u2014 daemon emits, web/CopilotKit consumes.",
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "files": [
@@ -24,10 +24,10 @@
     "@open-design/contracts": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "20.19.39",
-    "esbuild": "0.28.0",
+    "@types/node": "24.13.6",
+    "esbuild": "0.28.2",
     "typescript": "5.9.3",
-    "vitest": "4.1.6"
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": "~24"

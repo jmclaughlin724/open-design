@@ -1149,7 +1149,7 @@ export function ChatPane({
   const anchorPendingRef = useRef(false);
   const anchorActiveRef = useRef(false);
   const tailSpacerRef = useRef<HTMLDivElement | null>(null);
-  const chatRailHighlightTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const chatRailHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [chatRailHighlightedMessageId, setChatRailHighlightedMessageId] =
     useState<string | null>(null);
   const prevStreamingRef = useRef(streaming);
@@ -4763,7 +4763,7 @@ function UserMessageImpl({
       appliedContextItems.length > 0,
   );
   const [copied, setCopied] = useState(false);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     return () => {

@@ -565,7 +565,8 @@ function PastePlugin({
   useEffect(() => {
     return editor.registerCommand(
       PASTE_COMMAND,
-      (event: ClipboardEvent) => {
+      (event: ClipboardEvent | InputEvent | KeyboardEvent) => {
+        if (!('clipboardData' in event)) return false;
         const files = Array.from(event.clipboardData?.files ?? []);
         if (files.length > 0) {
           event.preventDefault();

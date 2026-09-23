@@ -546,7 +546,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 
 | Шар | Стек |
 |---|---|
-| Фронтенд | Next.js 16 App Router + React 18 + TypeScript |
+| Фронтенд | Next.js 16 App Router + React 19.3 + TypeScript |
 | Демон | Node 24 · Express · потокова передача SSE · `better-sqlite3` |
 | Сховище | Перш ніж змінювати або документувати шляхи сховища демона, необхідно прочитати кореневий `AGENTS.md`, розділ **Daemon data directory contract**. Цей README НЕ ПОВИНЕН переказувати його. |
 | Попередній перегляд | Filesystem-запуск рендерить канонічні файли; BYOK/API розбирає повний `<artifact>` в iframe `srcdoc` |

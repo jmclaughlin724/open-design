@@ -546,7 +546,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 
 | レイヤー | スタック |
 |---|---|
-| フロントエンド | Next.js 16 App Router + React 18 + TypeScript |
+| フロントエンド | Next.js 16 App Router + React 19.3 + TypeScript |
 | デーモン | Node 24 · Express · SSE ストリーミング · `better-sqlite3` |
 | ストレージ | デーモンのストレージパスを変更または文書化する前に、ルートの `AGENTS.md` にある **Daemon data directory contract** を必ず読んでください。この README でそれを繰り返してはいけません。 |
 | プレビュー | filesystem 実行は正規ファイルを描画し、BYOK/API は完全な `<artifact>` ブロックを sandbox `srcdoc` iframe に解析します |

@@ -8,13 +8,13 @@
     "render:webm": "remotion render src/index.ts ChatMotionOverlay out/chat-motion-overlay.webm --image-format=png --pixel-format=yuva420p --codec=vp9"
   },
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "remotion": "^4.0.0"
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.527"
   },
   "devDependencies": {
-    "@remotion/cli": "^4.0.0",
-    "@types/react": "^19.0.0",
-    "typescript": "^5.5.0"
+    "@remotion/cli": "4.0.527",
+    "@types/react": "19.3.0",
+    "typescript": "5.9.3"
   }
 }

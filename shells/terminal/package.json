@@ -4,11 +4,20 @@
   "private": true,
   "type": "module",
   "description": "OpenDesign exact Terminal shell and official Node carrier.",
-  "bin": {"open-design-terminal": "./dist/cli.mjs"},
+  "bin": {
+    "open-design-terminal": "./dist/cli.mjs"
+  },
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
-  "exports": {".": {"types": "./dist/index.d.ts", "default": "./dist/index.mjs"}},
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.mjs"
+    }
+  },
   "scripts": {
     "build": "tsx ./esbuild.config.ts && tsc -p tsconfig.json --emitDeclarationOnly",
     "exact:pack": "pnpm run build && node ./dist/exact-pack.mjs",
@@ -17,13 +26,17 @@
     "pretypecheck": "pnpm --filter @open-design/standalone build",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
   },
-  "dependencies": {"@open-design/standalone": "workspace:*"},
-  "devDependencies": {
-    "@types/node": "24.12.2",
-    "esbuild": "0.28.0",
-    "tsx": "4.22.3",
-    "typescript": "6.0.3",
-    "vitest": "4.1.6"
+  "dependencies": {
+    "@open-design/standalone": "workspace:*"
   },
-  "engines": {"node": "24.18.0"}
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "esbuild": "0.28.2",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": "24.18.0"
+  }
 }

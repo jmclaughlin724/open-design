@@ -546,7 +546,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 
 | 계층 | 스택 |
 |---|---|
-| 프론트엔드 | Next.js 16 App Router + React 18 + TypeScript |
+| 프론트엔드 | Next.js 16 App Router + React 19.3 + TypeScript |
 | 데몬 | Node 24 · Express · SSE 스트리밍 · `better-sqlite3` |
 | 스토리지 | daemon 저장 경로를 변경하거나 문서화하기 전에 반드시 루트 `AGENTS.md`의 **Daemon data directory contract**를 읽어야 합니다. 이 README는 그 내용을 다시 서술해서는 안 됩니다. |
 | 미리보기 | filesystem 실행은 정규 파일을 렌더링하고 BYOK/API는 완전한 `<artifact>` 블록을 샌드박스 `srcdoc` iframe으로 파싱합니다 |

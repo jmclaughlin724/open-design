@@ -64,7 +64,11 @@ const designSystemSummary: DesignSystemSummary = {
   isEditable: true,
 };
 
-function registerRoutes(app: express.Express, canMutate: (root: string, id: string, req: any) => Promise<boolean>) {
+function registerRoutes(
+  app: express.Express,
+  canMutate: (root: string, id: string, req: any) => Promise<boolean>,
+  body = designSystemSummary.body,
+) {
   tempDir = mkdtempSync(path.join(os.tmpdir(), 'od-ds-mutation-guard-'));
   const db = openDatabase(tempDir, { dataDir: tempDir });
   ensureWorkspaceResource(db, 'design_system', 'ws-locked', 'user:mine', {
@@ -118,7 +122,7 @@ function registerRoutes(app: express.Express, canMutate: (root: string, id: stri
       listUserDesignSystemFiles: async () => null,
       listUserDesignSystemRevisions: async () => null,
       prepareDesignTokenContractRebuild: async () => ({ decision: { available: false } }) as never,
-      readAvailableDesignSystem: async () => designSystemSummary.body,
+      readAvailableDesignSystem: async () => body,
       readAvailableDesignSystemPackageInfo: async () => null,
       readAvailableDesignSystemStaticFile: async () => null,
       readDesignSystemWorkspaceTextFile: async () => null,
@@ -237,6 +241,31 @@ describe('design system PATCH/DELETE team-share mutation guard', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { canMutate?: boolean };
     expect(body.canMutate).toBe(true);
+  });
+
+  it('includes parsed DESIGN.md sections on the detail response', async () => {
+    const app = express();
+    app.use(express.json());
+    registerRoutes(app, async () => true, [
+      '# Teammate DS',
+      '## Identity',
+      'Paper and ink.',
+      '## Sources',
+      'Live export.',
+      '## Spacing',
+      'ignored',
+    ].join('\n'));
+    const baseUrl = await listen(app);
+
+    const res = await fetch(`${baseUrl}/api/design-systems/user:teammate-ds`);
+    expect(res.status).toBe(200);
+    const payload = (await res.json()) as {
+      document?: { sections: Array<{ id: string; body: string }> };
+      designSystem?: { document?: { sections: Array<{ id: string }> } };
+    };
+    expect(payload.document?.sections.map((section) => section.id)).toEqual(['identity', 'provenance']);
+    expect(payload.document?.sections[0]?.body).toBe('Paper and ink.');
+    expect(payload.designSystem?.document?.sections.map((section) => section.id)).toEqual(['identity', 'provenance']);
   });
 });
 

@@ -19,19 +19,19 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "3.1050.0",
+    "@aws-sdk/client-s3": "3.1138.0",
     "@ffmpeg-installer/ffmpeg": "1.1.0",
     "@ffprobe-installer/ffprobe": "2.1.2",
     "@open-design/contracts": "workspace:*",
     "@open-design/release": "workspace:*",
-    "@playwright/test": "1.60.0",
-    "@types/node": "20.19.39",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.13.6",
     "@types/pngjs": "6.0.5",
     "pixelmatch": "7.2.0",
     "pngjs": "7.0.0",
-    "tsx": "4.22.3",
-    "typescript": "5.9.3",
-    "vitest": "4.1.6"
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": "~24"

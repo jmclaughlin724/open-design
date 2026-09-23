@@ -264,7 +264,7 @@ Für Prompt-Stack-Bugs fügen Sie die **vollständige Assistant Message** bei, d
 Um das Projekt fokussiert zu halten, öffnen Sie bitte keine PRs, die:
 
 - **Eine Model Runtime vendoren.** OD setzt darauf, dass Ihre vorhandene CLI reicht.
-- **Das Frontend ohne vorherige Abstimmung aus dem aktuellen Stack reißen.** Next.js 16 App Router + React 18 + TS ist gesetzt.
+- **Das Frontend ohne vorherige Abstimmung aus dem aktuellen Stack reißen.** Next.js 16 App Router + React 19.3 + TS ist gesetzt.
 - **Den daemon durch eine Serverless Function ersetzen.** Der daemon besitzt ein echtes `cwd` und startet echte CLIs.
 - **Telemetry oder externe Datenerfassung außerhalb des Datenschutzvertrags hinzufügen.** Produktanalysen und maskierte Session-Replays sind einwilligungspflichtig; bereinigte Sicherheits-/Zuverlässigkeitstelemetrie ist in entsprechend konfigurierten Builds stets aktiv. Neue Events, Felder oder Ziele müssen die in [`PRIVACY.md`](../../PRIVACY.md) dokumentierten Einwilligungs-, Minimierungs- und Bereinigungsgrenzen einhalten.
 - **Ein Binary bündeln** ohne Lizenzdatei und Autorenschaft direkt daneben.

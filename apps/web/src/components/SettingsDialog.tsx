@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, Dispatch, SetStateAction } from 'react';
+import type { CSSProperties, Dispatch, ReactElement, SetStateAction } from 'react';
 import { Button, VisuallyHidden } from '@open-design/components';
 import type {
   AmrWalletSnapshot,
@@ -8304,7 +8304,7 @@ function buildSharedMcpJson(info: McpInstallInfo): string {
 // copy-snippet path still works for users who prefer to paste manually
 // or whose Codex CLI is not on PATH (button shows a disabled hint in
 // that case).
-function CodexInstallToggle(): JSX.Element | null {
+function CodexInstallToggle(): ReactElement | null {
   const { t } = useI18n();
   const [available, setAvailable] = useState<boolean | null>(null);
   const [installed, setInstalled] = useState<boolean | null>(null);

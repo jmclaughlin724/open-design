@@ -5,7 +5,7 @@
 // Two questions. The score is the metric and costs one tap; the follow-up asks
 // what to fix first and can be skipped. Anything longer was cut deliberately —
 // every extra question is paid for in completion rate on the score itself.
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import type { Variants } from 'motion/react';
@@ -297,7 +297,7 @@ export function ExperienceSurvey({
 
   const counter = <span className={styles.count}>{stepIndex + 1}/{STEP_ORDER.length}</span>;
 
-  let body: JSX.Element;
+  let body: ReactElement;
   if (step === 'recommendation') {
     body = (
       <>

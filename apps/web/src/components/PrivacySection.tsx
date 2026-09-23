@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from 'react';
+import type { Dispatch, ReactElement, SetStateAction } from 'react';
 import { useAnalytics } from '../analytics/provider';
 import { trackSettingsPrivacyClick } from '../analytics/events';
 import { useT } from '../i18n';
@@ -19,7 +19,7 @@ function generateInstallationId(): string {
   return `inst-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function PrivacySection({ cfg, setCfg }: Props): JSX.Element {
+export function PrivacySection({ cfg, setCfg }: Props): ReactElement {
   const t = useT();
   const analytics = useAnalytics();
   const telemetry: TelemetryConfig = cfg.telemetry ?? {};
@@ -160,7 +160,7 @@ interface ToggleRowProps {
 // Reuses .toggle-row (label + hint + iOS-style switch) — same control
 // NewProjectPanel uses for "speaker notes" / "animations" toggles, so the
 // Privacy panel reads as native to the rest of the app.
-function ToggleRow({ label, hint, checked, onChange }: ToggleRowProps): JSX.Element {
+function ToggleRow({ label, hint, checked, onChange }: ToggleRowProps): ReactElement {
   return (
     <button
       type="button"
@@ -183,7 +183,7 @@ interface ConsentProps {
   sharingEnabled?: boolean;
 }
 
-function ConsentCard({ onShare, onDecline, sharingEnabled }: ConsentProps): JSX.Element {
+function ConsentCard({ onShare, onDecline, sharingEnabled }: ConsentProps): ReactElement {
   const t = useT();
   return (
     <div className="settings-subsection">

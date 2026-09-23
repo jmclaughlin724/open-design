@@ -36,7 +36,14 @@ interface Props {
 }
 
 type Phase = 'connecting' | 'live' | 'reconnecting' | 'ended' | 'unavailable';
-type CssTerminalThemeKey = Exclude<keyof ITheme, 'extendedAnsi'>;
+type CssTerminalThemeKey = Exclude<
+  keyof ITheme,
+  | 'extendedAnsi'
+  | 'scrollbarSliderBackground'
+  | 'scrollbarSliderHoverBackground'
+  | 'scrollbarSliderActiveBackground'
+  | 'overviewRulerBorder'
+>;
 
 const TERMINAL_THEME_VARS = {
   foreground: '--terminal-fg',

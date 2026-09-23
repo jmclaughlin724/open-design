@@ -290,7 +290,7 @@ Table OVERRIDES ใน `maxTokens.ts` มีไว้สำหรับกรณ
 เพื่อให้ project focused โปรดอย่าเปิด PR ที่:
 
 - **Vendor model runtime.** Bet ทั้งหมดของ OD คือ "CLI ที่คุณมีอยู่แล้วก็พอ". เราไม่ ship `pi-ai`, OpenAI keys หรือ model loaders.
-- **Rewrite frontend ออกจาก stack ปัจจุบันโดยไม่คุยก่อน.** Next.js 16 App Router + React 18 + TS คือเส้น. ไม่มี Astro, Solid, Svelte หรือ framework rewrites อื่น เว้นแต่ maintainers ต้องการ migration นั้นชัดเจน.
+- **Rewrite frontend ออกจาก stack ปัจจุบันโดยไม่คุยก่อน.** Next.js 16 App Router + React 19.3 + TS คือเส้น. ไม่มี Astro, Solid, Svelte หรือ framework rewrites อื่น เว้นแต่ maintainers ต้องการ migration นั้นชัดเจน.
 - **แทน daemon ด้วย serverless function.** จุดประสงค์ทั้งหมดของ daemon คือถือ `cwd` จริงและ spawn CLI จริง. Vercel deployment ของ SPA ทำได้; daemon ยังเป็น daemon.
 - **เพิ่ม telemetry หรือการเก็บข้อมูลภายนอกนอกสัญญาความเป็นส่วนตัว.** Product analytics และ session replay ที่ปกปิดข้อมูลต้องได้รับ consent; telemetry ด้านความปลอดภัย/ความเสถียรที่ scrub แล้วจะเปิดตลอดใน build ที่ตั้งค่าไว้. Event, field หรือปลายทางใหม่ต้องรักษาขอบเขต consent, data minimization และ scrubbing ตาม [`PRIVACY.md`](../../PRIVACY.md).
 - **Bundle binary** โดยไม่มี license file และ authorship attribution ข้าง ๆ.

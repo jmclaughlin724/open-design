@@ -22,6 +22,7 @@ export type DesignTokenBinding = {
   reason: string;
   sources: string[];
   sourceName?: string;
+  semantics?: import('@open-design/contracts').DesignTokenSemantics;
 };
 
 export type DesignTokenContractReport = {

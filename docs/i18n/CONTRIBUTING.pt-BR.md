@@ -290,7 +290,7 @@ Para bugs da pilha de prompt ("o agente emitiu um hero com gradiente roxo, a bla
 Para manter o projeto focado, por favor não abra PRs que:
 
 - **Embutam um runtime de modelo.** Toda a aposta do OD é "seu CLI existente já basta". Não despachamos `pi-ai`, chaves OpenAI nem loaders de modelo.
-- **Reescrevam o frontend para fora da stack atual sem discussão prévia.** Next.js 16 App Router + React 18 + TS é a linha. Sem Astro, Solid, Svelte ou outras reescritas de framework a menos que mantenedores explicitamente queiram essa migração.
+- **Reescrevam o frontend para fora da stack atual sem discussão prévia.** Next.js 16 App Router + React 19.3 + TS é a linha. Sem Astro, Solid, Svelte ou outras reescritas de framework a menos que mantenedores explicitamente queiram essa migração.
 - **Substituam o daemon por uma função serverless.** O ponto inteiro do daemon é ter um `cwd` real e spawnar um CLI real. Deploy do SPA na Vercel está ok; o daemon continua daemon.
 - **Adicionem telemetria ou coleta externa de dados fora do contrato de privacidade.** Analytics de produto e replay de sessão mascarado dependem de consentimento; telemetria sanitizada de segurança/confiabilidade fica sempre ativa em builds configurados. Todo novo evento, campo ou destino deve preservar os limites de consentimento, minimização e sanitização descritos em [`PRIVACY.md`](../../PRIVACY.md).
 - **Empacotem um binário** sem arquivo de licença e atribuição de autoria ao lado.

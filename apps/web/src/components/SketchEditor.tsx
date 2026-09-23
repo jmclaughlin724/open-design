@@ -108,7 +108,7 @@ export function SketchEditor({
   const [exporting, setExporting] = useState(false);
   const [theme, setTheme] = useState(readExcalidrawTheme);
   const [toast, setToast] = useState<SketchToastState | null>(null);
-  const savedTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const onSceneChangeRef = useLatestRef(onSceneChange);
   const onClearRef = useLatestRef(onClear);
   const onSaveRef = useLatestRef(onSave);

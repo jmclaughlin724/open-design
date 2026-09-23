@@ -80,7 +80,7 @@ the same capabilities.
 
 ### 3.1 Web app (`apps/web`)
 
-The web app is a Next.js 16 App Router application using React 18. It owns:
+The web app is a Next.js 16 App Router application using React 19.3. It owns:
 
 - project, chat, file-workspace, preview, Settings, marketplace, and creation
   workflows;

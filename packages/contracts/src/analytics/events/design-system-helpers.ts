@@ -3,6 +3,7 @@
  * Design-system tracking bucket/slug helpers.
  */
 import type { TrackingDesignSystemFolderCountBucket, TrackingDesignSystemLengthBucket, TrackingDesignSystemModuleType, TrackingDesignSystemRepoHost, TrackingDesignSystemTotalSizeBucket } from './design-systems.js';
+import { parseUrl } from '../../url-parse.js';
 // ---- Design-system tracking helpers --------------------------------------
 
 // `length` is a character count (after trimming). Buckets match the
@@ -103,7 +104,7 @@ export function designSystemRepoHostFromUrl(
   const raw = (url ?? '').trim();
   if (!raw) return 'unknown';
   try {
-    const host = new URL(raw).hostname.toLowerCase();
+    const host = parseUrl(raw).hostname.toLowerCase();
     if (host === 'github.com' || host.endsWith('.github.com')) return 'github';
     if (host === 'gitlab.com' || host.endsWith('.gitlab.com')) return 'gitlab';
     return 'other';

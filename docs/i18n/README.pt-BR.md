@@ -546,7 +546,7 @@ Endpoint do registry de plugins: `GET /api/plugins`. Visão geral do diretório 
 
 | Camada | Stack |
 |---|---|
-| Frontend | Next.js 16 App Router + React 18 + TypeScript |
+| Frontend | Next.js 16 App Router + React 19.3 + TypeScript |
 | Daemon | Node 24 · Express · streaming SSE · `better-sqlite3` |
 | Armazenamento | Antes de alterar ou documentar caminhos de armazenamento do daemon, você DEVE ler o `AGENTS.md` na raiz, seção **Daemon data directory contract**. Este README NÃO DEVE repeti-lo. |
 | Preview | Execuções filesystem renderizam arquivos canônicos; BYOK/API analisa um bloco `<artifact>` completo em iframe `srcdoc` isolado |
