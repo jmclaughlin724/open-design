@@ -8,6 +8,7 @@ import {
   type AbsorbedFileKind,
 } from '@open-design/contracts/api/absorbed-files';
 import { validateProjectPath } from '../projects.js';
+import { adaptClaudeDesignSource } from './claude-design-source.js';
 
 const EOCD_SIG = 0x06054b50;
 const CENTRAL_SIG = 0x02014b50;
@@ -73,6 +74,13 @@ export type ClaudeDesignImportResult = {
   kinds: Record<string, AbsorbedFileKind>;
   entryKind: AbsorbedFileKind;
   previewTransport: 'srcdoc' | 'url';
+  designSource: {
+    sourceKind: 'claude-design-import';
+    sourcePath: string | null;
+    tokenCount: number;
+    tokensPath: string;
+    evidencePath: string;
+  } | null;
 };
 
 type ZipEntry = {
@@ -138,8 +146,13 @@ export async function importClaudeDesignZip(
   if (files.length === 0) throw new Error('zip contains no files');
   assertUniqueImportPaths(files);
   const result = finishImport(files, 'zip does not contain an HTML file');
+  attachClaudeDesignSource(files, result.entryFile);
   await writeImportedFiles(projectDir, files);
-  return result;
+  return {
+    ...result,
+    files: files.map((file) => file.path),
+    designSource: designSourceOf(files, result.entryFile),
+  };
 }
 
 export async function importClaudeDesignFiles(
@@ -168,8 +181,13 @@ export async function importClaudeDesignFiles(
 
   assertUniqueImportPaths(files);
   const result = finishImport(files, 'import does not contain an HTML file');
+  attachClaudeDesignSource(files, result.entryFile);
   await writeImportedFiles(projectDir, files);
-  return result;
+  return {
+    ...result,
+    files: files.map((file) => file.path),
+    designSource: designSourceOf(files, result.entryFile),
+  };
 }
 
 /**
@@ -580,7 +598,41 @@ function kindRank(kind: AbsorbedFileKind): number {
   return KIND_RANK[kind] ?? 0;
 }
 
-function finishImport(files: ImportedFile[], emptyHtmlMessage: string): ClaudeDesignImportResult {
+const CLAUDE_DESIGN_TOKENS_PATH = 'source/claude-design-tokens.css';
+const CLAUDE_DESIGN_EVIDENCE_PATH = 'source/claude-design-evidence.md';
+
+function attachClaudeDesignSource(files: ImportedFile[], entryFile: string): void {
+  const entry = files.find((file) => file.path === entryFile);
+  if (!entry) return;
+  const adapted = adaptClaudeDesignSource({
+    html: entry.body.toString('utf8'),
+    sourcePath: entryFile,
+  });
+  pushDerived(files, CLAUDE_DESIGN_TOKENS_PATH, adapted.tokensCss);
+  pushDerived(files, CLAUDE_DESIGN_EVIDENCE_PATH, adapted.evidenceMd);
+}
+
+function designSourceOf(files: ImportedFile[], entryFile: string): ClaudeDesignImportResult['designSource'] {
+  if (!files.some((file) => file.path === CLAUDE_DESIGN_TOKENS_PATH)) return null;
+  const adapted = adaptClaudeDesignSource({
+    html: files.find((file) => file.path === entryFile)?.body.toString('utf8') ?? '',
+    sourcePath: entryFile,
+  });
+  return {
+    sourceKind: 'claude-design-import',
+    sourcePath: entryFile,
+    tokenCount: adapted.properties.length,
+    tokensPath: CLAUDE_DESIGN_TOKENS_PATH,
+    evidencePath: CLAUDE_DESIGN_EVIDENCE_PATH,
+  };
+}
+
+function pushDerived(files: ImportedFile[], relPath: string, body: string): void {
+  if (files.some((file) => file.path === relPath)) return;
+  files.push({ path: relPath, body: Buffer.from(body) });
+}
+
+function finishImport(files: ImportedFile[], emptyHtmlMessage: string): Omit<ClaudeDesignImportResult, 'designSource'> {
   const described = files.map((file) => {
     const source = isTextImport(file.path) ? file.body.toString('utf8') : undefined;
     return source === undefined ? { path: file.path } : { path: file.path, source };

@@ -8,6 +8,7 @@ import { runArtifactsCli } from './artifacts-cli.js';
 import { runResource } from './resource-cli.js';
 import { runTarget } from './target-cli.js';
 import { runTargetContext } from './target-context-cli.js';
+import { runTargetChanges } from './target-changes-cli.js';
 import { runImport } from './claude-design-import-cli.js';
 import { runDesignSystemCheck } from './design-system-check-cli.js';
 import { runDesignSystemShow } from './design-system-show-cli.js';
@@ -445,6 +446,11 @@ const SUBCOMMAND_MAP = {
 async function runTargetCommand(args) {
   if (args[0] === 'context') {
     const { exitCode } = await runTargetContext(args.slice(1));
+    if (exitCode !== 0) process.exitCode = exitCode;
+    return;
+  }
+  if (args[0] === 'changes') {
+    const { exitCode } = await runTargetChanges(args.slice(1));
     if (exitCode !== 0) process.exitCode = exitCode;
     return;
   }
