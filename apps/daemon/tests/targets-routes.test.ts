@@ -124,6 +124,7 @@ describe('connected target routes', () => {
     expect(unbound.body).toEqual({ target: null });
     expect((await api.req('/api/projects/proj-1/target')).body).toEqual({ target: null });
     expect(getProject(api.db, 'proj-1')?.metadata?.connectedTarget).toBeUndefined();
+    expect(getProject(api.db, 'proj-1')?.metadata?.connectedTargetSnapshot).toBeUndefined();
   });
 
   it('stores a GitHub bind as owner/repo only', async () => {
@@ -166,6 +167,7 @@ describe('connected target routes', () => {
     expect(rejected.body.error.message).toMatch(/desktop import token rejected/i);
     expect(rejected.body.error.details.reason).toBe('token missing');
     expect(getProject(api.db, 'proj-1')?.metadata?.connectedTarget).toBeUndefined();
+    expect(getProject(api.db, 'proj-1')?.metadata?.connectedTargetSnapshot).toBeUndefined();
 
     const secret = getDesktopAuthSecret();
     expect(secret).not.toBeNull();

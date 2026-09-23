@@ -9,8 +9,11 @@ import type { sendApiError as sendApiErrorImpl } from '../http/api-errors.js';
 import { getProject } from '../db.js';
 import {
   bindConnectedTarget,
+  captureTargetSnapshot,
+  detectTargetDrift,
   parseBindRequest,
   readConnectedTarget,
+  readTargetSnapshot,
   resolveLocalTargetFolder,
   unbindConnectedTarget,
 } from '../targets/index.js';
@@ -149,7 +152,11 @@ export function registerTargetRoutes(app: Express, ctx: RegisterTargetRoutesDeps
       target = parsed.target;
     }
 
-    const bound = bindConnectedTarget(db, projectId, target);
+    const captured = await captureTargetSnapshot(target);
+    if (!captured.ok) {
+      return sendApiError(res, 400, 'BAD_REQUEST', captured.message);
+    }
+    const bound = bindConnectedTarget(db, projectId, target, captured.snapshot);
     if (!bound) {
       return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
     }
@@ -166,5 +173,30 @@ export function registerTargetRoutes(app: Express, ctx: RegisterTargetRoutesDeps
     }
     const body: ConnectedTargetResponse = { target: null };
     res.json(body);
+  });
+
+  app.get('/api/projects/:id/target/drift', async (req, res) => {
+    const projectId = await requireProject(req, res, 'read');
+    if (!projectId) return;
+    const project = readProject(db, projectId);
+    const target = readConnectedTarget(project?.metadata);
+    if (!target) {
+      return sendApiError(res, 404, 'NOT_FOUND', 'target not bound');
+    }
+    const snapshot = readTargetSnapshot(project?.metadata);
+    if (!snapshot) {
+      return sendApiError(res, 409, 'CONFLICT', 'target has no base snapshot');
+    }
+    const drift = await detectTargetDrift(target, snapshot);
+    if (!drift.ok) {
+      const missing = drift.message === 'target has no base snapshot';
+      return sendApiError(
+        res,
+        missing ? 409 : 400,
+        missing ? 'CONFLICT' : 'BAD_REQUEST',
+        drift.message,
+      );
+    }
+    res.json(drift.report);
   });
 }
