@@ -840,6 +840,8 @@ import { registerLiveArtifactRoutes } from './routes/live-artifact.js';
 import { registerDesignSystemToolRoutes } from './routes/design-system-tool.js';
 import { createPreviewTokenServeMiddleware, registerPreviewTokenRoutes } from './routes/preview-tokens.js';
 import { registerTargetRoutes } from './routes/targets.js';
+import { registerTargetContextRoutes } from './routes/target-context.js';
+import { registerStagedChangesRoutes } from './routes/staged-changes.js';
 import { registerDesignSystemCheckRoutes } from './routes/design-system-check.js';
 import { registerDesignSystemResolvedRoutes } from './routes/design-system-resolved.js';
 import { registerDesignContextRoutes } from './routes/design-context.js';
@@ -8470,6 +8472,21 @@ export async function startServer({
     http: httpDeps,
     paths: pathDeps,
     auth: authDeps,
+    projectStore: projectStoreDeps,
+    authorizeProjectRequest,
+  });
+  registerTargetContextRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    projectFiles: projectFileDeps,
+    authorizeProjectRequest,
+  });
+  registerStagedChangesRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
     projectStore: projectStoreDeps,
     authorizeProjectRequest,
   });

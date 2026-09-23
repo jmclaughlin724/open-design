@@ -737,27 +737,27 @@ clean one; report present in dry-run output.
 
 - [x] A1 Token usage/derivation/relations *(done — local)*
 - [x] A2 DESIGN.md section schema *(done — local)*
-- [ ] B1 check_design_system tool *(route and CLI wired; MCP tool and skill still open)*
-- [ ] B2 render_probe tool *(HTML-parse route and CLI wired; MCP tool, skill, and screenshot still open)*
+- [x] B1 check_design_system tool *(route, CLI, MCP, and skill wired; screenshot-free)*
+- [x] B2 render_probe tool *(HTML-parse route, CLI, MCP, and skill wired; no screenshot)*
 - [x] B3 SSE roll-ups + todo events *(merged, wired into emitAgentEvent)*
 - [x] C1 Anchor-stable comments *(merged)*
 - [x] C2 Per-project preview tokens *(merged, wired before static serve)*
 - [x] C3 Resolved design-system manifest cache *(merged, route wired)*
-- [ ] D1 Design-system document canvas
+- [x] D1 Design-system document canvas *(component mounted as a workspace tab; persistence is D2)*
 - [ ] D2 Feedback→usage-notes persistence
 - [x] D3 Composer chips + template starters + start-from-code
 - [x] D4 Workspace-default design system + starred filter + thumbnails
 - [x] E1 Absorb pipeline (raw HTML ingest + normalization) *(merged)*
 - [x] E2 File-kind detection *(merged)*
-- [ ] E3 Context extraction *(route wired; MCP tool and skill still open)*
-- [ ] E4 Claude Design HTML → design-system source adapter
+- [x] E3 Context extraction *(route, CLI, MCP, and skill wired; prompt digest still open)*
+- [x] E4 Claude Design HTML → design-system source adapter *(pure adapter landed; absorb path does not call it yet)*
 - [x] F1 Connected-target model *(merged, `od target` wired)*
-- [ ] F2 Target context acquisition
+- [x] F2 Target context acquisition *(local-folder route and `od target context` wired; GitHub fetch still open)*
 - [x] F3 Base snapshot + drift detection *(merged into the existing target registrar)*
-- [ ] F4 Change kinds + staged-changes view
+- [x] F4 Change kinds + staged-changes view *(route and list component landed; `od target changes` still open)*
 - [ ] F5 Promotion engine
 - [ ] F6 The gate (write-guard, approval, lock)
-- [ ] F7 Security (credentials, secret scan)
+- [x] F7 Security (credentials, secret scan) *(scanner exported; promote does not call it yet)*
 - [ ] F8 Post-promote feedback loop
 - [ ] F9 Promote-time design-system check
 

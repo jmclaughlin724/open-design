@@ -50,6 +50,10 @@ import {
 } from '../providers/registry';
 import type { Dict } from '../i18n/types';
 import { STAGE_ATTACHMENT_EVENT, type StageAttachmentEventDetail } from './ChatComposer';
+import {
+  DESIGN_SYSTEM_CANVAS_TAB_ID,
+  DesignSystemDocumentCanvasPane,
+} from './DesignSystemDocumentCanvas';
 import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry';
 import { navigate, registerNavigationGuard } from '../router';
 import { downloadDesignSystemArchive, downloadProjectArchive } from '../runtime/exports';
@@ -2014,6 +2018,7 @@ export function FileWorkspace({
     if (
       activeTab === DESIGN_FILES_TAB
       || activeTab === DESIGN_SYSTEM_TAB
+      || activeTab === DESIGN_SYSTEM_CANVAS_TAB_ID
     ) return;
     if (isBrowserTabId(activeTab)) {
       if (!browserTabs.some((tab) => tab.id === activeTab)) {
@@ -2229,7 +2234,7 @@ export function FileWorkspace({
 
   function closeActiveWorkspaceTab() {
     if (!workspaceTabIds.includes(activeTab)) return;
-    if (activeTab === DESIGN_FILES_TAB || activeTab === DESIGN_SYSTEM_TAB) return;
+    if (activeTab === DESIGN_FILES_TAB || activeTab === DESIGN_SYSTEM_TAB || activeTab === DESIGN_SYSTEM_CANVAS_TAB_ID) return;
     if (isBrowserTabId(activeTab)) {
       closeBrowserTab(activeTab);
       return;
@@ -3018,6 +3023,7 @@ export function FileWorkspace({
     if (
       activeTab === DESIGN_FILES_TAB
       || activeTab === DESIGN_SYSTEM_TAB
+      || activeTab === DESIGN_SYSTEM_CANVAS_TAB_ID
       || isBrowserTabId(activeTab)
     ) return null;
     const onDisk = visibleFiles.find((f) => f.name === activeTab);
@@ -3289,6 +3295,7 @@ export function FileWorkspace({
     if (
       activeTab === DESIGN_FILES_TAB
       || activeTab === DESIGN_SYSTEM_TAB
+      || activeTab === DESIGN_SYSTEM_CANVAS_TAB_ID
       || isBrowserTabId(activeTab)
     ) return null;
     return liveArtifactEntries.find((entry) => entry.tabId === activeTab) ?? null;
@@ -3296,6 +3303,7 @@ export function FileWorkspace({
 
   const activeTabHasRenderableSurface =
     (activeTab === DESIGN_SYSTEM_TAB && Boolean(designSystemProject))
+    || activeTab === DESIGN_SYSTEM_CANVAS_TAB_ID
     || (isBrowserTabId(activeTab) && browserTabs.some((tab) => tab.id === activeTab))
     || isTerminalTabId(activeTab)
     || (isSideChatTabId(activeTab) && Boolean(chatConfig) && Boolean(chatAgentsById))
@@ -3951,6 +3959,23 @@ export function FileWorkspace({
             clearTabDragState();
           }}
         >
+          {!initialMaterializationPending ? (
+            <button
+              type="button"
+              className={`ws-tab design-system-tab ${activeTab === DESIGN_SYSTEM_CANVAS_TAB_ID ? 'active' : ''}`}
+              role="tab"
+              aria-selected={activeTab === DESIGN_SYSTEM_CANVAS_TAB_ID}
+              tabIndex={0}
+              data-testid="design-system-canvas-tab"
+              onClick={() => setPersistedActive(DESIGN_SYSTEM_CANVAS_TAB_ID)}
+              title="Design system document"
+            >
+              <span className="tab-icon" aria-hidden>
+                <Icon name="blocks" size={13} />
+              </span>
+              <span className="ws-tab-label">Design system</span>
+            </button>
+          ) : null}
           {!initialMaterializationPending && designSystemProject ? (
             <button
               type="button"
@@ -4249,6 +4274,8 @@ export function FileWorkspace({
             onPaste={noop}
             onNewSketch={noop}
           />
+        ) : activeTab === DESIGN_SYSTEM_CANVAS_TAB_ID ? (
+          <DesignSystemDocumentCanvasPane projectId={projectId} />
         ) : activeTab === DESIGN_SYSTEM_TAB && designSystemProject ? (
           <DesignSystemProjectPanel
             projectId={projectId}
