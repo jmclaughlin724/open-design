@@ -30,6 +30,7 @@ export * from './api/design-context.js';
 export * from './api/preview-tokens.js';
 export * from './api/design-system-resolved.js';
 export * from './api/targets.js';
+export * from './api/staged-changes.js';
 export * from './api/design-system-check.js';
 export * from './api/figma.js';
 export * from './api/host-tools.js';
