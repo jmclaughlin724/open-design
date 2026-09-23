@@ -38,6 +38,10 @@
       "types": "./dist/api/absorbed-files.d.ts",
       "default": "./dist/api/absorbed-files.mjs"
     },
+    "./api/design-context": {
+      "types": "./dist/api/design-context.d.ts",
+      "default": "./dist/api/design-context.mjs"
+    },
     "./api/providerModels": {
       "types": "./dist/api/providerModels.d.ts",
       "default": "./dist/api/providerModels.mjs"
