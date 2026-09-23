@@ -46,6 +46,11 @@ import {
 import { authorizeReasoningEgress, sendReasoningEgressDenial } from './reasoning-egress.js';
 import { sandboxImportedProjectRootUnavailableReason } from './sandbox-mode.js';
 import { parseOrchestratorWorkspace } from './workspace-contract.js';
+import { readAppConfig } from './app-config.js';
+import {
+  designSystemIdAfterValidation,
+  selectCreateDesignSystemId,
+} from './default-design-system.js';
 import {
   authorizeCreatedProjectWorkspace,
   bindCreatedProjectToWorkspace,
@@ -151,7 +156,7 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
   const { importUpload } = ctx.uploads;
   const { fs, path } = ctx.node;
   const { randomId } = ctx.ids;
-  const { PROJECTS_DIR, RUNTIME_DATA_DIR_CANONICAL } = ctx.paths;
+  const { PROJECTS_DIR, RUNTIME_DATA_DIR, RUNTIME_DATA_DIR_CANONICAL } = ctx.paths;
 
   // A project root (imported folder OR a working-dir rebind) must not point at a
   // system directory or a credential store. Binding it at $HOME / ~/.ssh / etc.
@@ -490,7 +495,7 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
       if (!createWorkspace.ok) {
         return sendCreatedProjectWorkspaceError(res, createWorkspace);
       }
-      const { baseDir, name, skillId, designSystemId, orchestratorWorkspace } = req.body || {};
+      const { baseDir, name, skillId, orchestratorWorkspace } = req.body || {};
       if (typeof baseDir !== 'string' || !baseDir.trim()) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'baseDir required');
       }
@@ -602,16 +607,30 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
           ? name.trim()
           : path.basename(normalizedPath);
       const entryFile = await detectEntryFile(normalizedPath);
+      const designSystemSelection = selectCreateDesignSystemId({
+        body: req.body,
+        workspaceDefaultId: (await readAppConfig(RUNTIME_DATA_DIR)).defaultDesignSystemId,
+      });
+      if (designSystemSelection.invalid) {
+        return sendApiError(res, 400, 'INVALID_DESIGN_SYSTEM', 'designSystemId must be a string or null');
+      }
       const designSystemValidation = await validateProjectDesignSystemId(
-        designSystemId,
+        designSystemSelection.id,
         { workspaceId: createWorkspace.context?.workspaceId ?? null },
       );
-      if (!designSystemValidation.ok) {
+      const resolvedDesignSystem = designSystemIdAfterValidation({
+        selection: designSystemSelection,
+        validationOk: designSystemValidation.ok,
+        validatedId: designSystemValidation.ok ? designSystemValidation.id : null,
+      });
+      if (!resolvedDesignSystem.ok) {
         return sendApiError(
           res,
           400,
-          designSystemValidation.code,
-          designSystemValidation.message,
+          designSystemValidation.ok ? 'INVALID_DESIGN_SYSTEM' : designSystemValidation.code,
+          designSystemValidation.ok
+            ? 'designSystemId must be a string or null'
+            : designSystemValidation.message,
         );
       }
       const skillValidation = await validateProjectSkillId(
@@ -632,7 +651,7 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
           id,
           name: projectName,
           skillId: skillValidation.id,
-          designSystemId: designSystemValidation.id,
+          designSystemId: resolvedDesignSystem.id,
           pendingPrompt: null,
           metadata: {
             kind: 'prototype',

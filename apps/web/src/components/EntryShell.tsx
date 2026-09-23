@@ -1735,6 +1735,11 @@ export function EntryShell({
                 projectOwnerMemberIds={teamProjectOwnerMemberIds}
                 skills={skills}
                 skillsLoading={skillsLoading}
+                designTemplates={designTemplates}
+                agentId={config.agentId}
+                agentName={agents.find((agent) => agent.id === config.agentId)?.name ?? null}
+                {...(onImportFolder ? { onImportFolder } : {})}
+                {...(onImportFolderResponse ? { onImportFolderResponse } : {})}
                 connectors={connectors}
                 promptTemplates={promptTemplates}
                 executionSwitcher={view === 'home' ? homeExecutionSwitcher : undefined}

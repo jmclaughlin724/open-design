@@ -47,6 +47,12 @@ export interface AppConfigPrefs {
   agentCliEnvIntent?: AgentCliEnvIntentPrefs;
   skillId?: string | null;
   designSystemId?: string | null;
+  /**
+   * Workspace-level design system applied to new projects that omit
+   * `designSystemId`. A per-project selection on the create request overrides
+   * this, including an explicit null.
+   */
+  defaultDesignSystemId?: string | null;
   disabledSkills?: string[];
   disabledDesignSystems?: string[];
   installationId?: string | null;

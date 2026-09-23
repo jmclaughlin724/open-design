@@ -3437,3 +3437,50 @@
   cursor: default;
   opacity: 0.6;
 }
+
+.home-hero__context-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto 8px;
+}
+.entry-composer-context,
+.entry-template-starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.entry-composer-context__chip,
+.entry-template-starters__chip,
+.entry-start-from-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-panel);
+  color: var(--text-strong);
+  font-size: 12px;
+  line-height: 1.2;
+}
+.entry-composer-context__kind,
+.entry-composer-context__icon {
+  color: var(--text-muted);
+}
+.entry-template-starters__chip,
+.entry-start-from-code {
+  cursor: pointer;
+}
+.entry-start-from-code.is-on,
+.entry-template-starters__chip:hover,
+.entry-start-from-code:hover {
+  border-color: var(--accent, currentColor);
+}
+.entry-start-from-code:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
