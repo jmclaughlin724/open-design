@@ -22,3 +22,14 @@ export {
   diffManifest,
 } from './snapshot.js';
 export type { TargetBaseSnapshot, TargetDriftReport } from './snapshot.js';
+export {
+  driftHasConflict,
+  parsePromoteBody,
+  promoteTarget,
+  promotionBranch,
+  promotionSlug,
+  readPromotionHistory,
+} from './promote.js';
+export type { GhRunner, PromoteRequest, PromoteResult } from './promote.js';
+export { listPromotions, migratePromotions } from './promotion-store.js';
+export type { PromotionRecord } from './promotion-store.js';
