@@ -758,7 +758,7 @@ clean one; report present in dry-run output.
 - [ ] F5 Promotion engine
 - [ ] F6 The gate (write-guard, approval, lock)
 - [x] F7 Security (credentials, secret scan) *(scanner exported; promote does not call it yet)*
-- [ ] F8 Post-promote feedback loop
+- [x] F8 Post-promote feedback loop *(poller emits promotion_status; parent sends the SSE event)*
 - [ ] F9 Promote-time design-system check
 
 ## Sequencing

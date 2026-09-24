@@ -4,6 +4,8 @@ type StagedStatus = 'added' | 'changed' | 'removed';
 
 export interface StagedChangesListProps {
   summary: StagedChangesSummary;
+  /** Paths present in promotion history. Those rows render as done. */
+  shippedPaths?: readonly string[];
 }
 
 interface StagedRow extends StagedChangeEntry {
@@ -23,8 +25,9 @@ function rowsOf(summary: StagedChangesSummary): StagedRow[] {
  * Review list for changes vs the connected target. Include is on by
  * default. This component does not promote.
  */
-export function StagedChangesList({ summary }: StagedChangesListProps) {
+export function StagedChangesList({ summary, shippedPaths }: StagedChangesListProps) {
   const rows = rowsOf(summary);
+  const shipped = new Set(shippedPaths ?? []);
   return (
     <section className="staged-changes" data-testid="staged-changes" aria-label="Changes vs target">
       <h2 className="staged-changes-title">Changes vs target</h2>
@@ -32,28 +35,35 @@ export function StagedChangesList({ summary }: StagedChangesListProps) {
         <p className="staged-changes-empty" data-testid="staged-changes-empty">No changes vs target</p>
       ) : (
         <ul className="staged-changes-list" data-testid="staged-changes-list">
-          {rows.map((row) => (
-            <li
-              key={`${row.status}:${row.path}`}
-              className="staged-change-row"
-              data-testid="staged-change-row"
-              data-path={row.path}
-              data-status={row.status}
-              data-kind={row.kind}
-            >
-              <label className="staged-change-include">
-                <input
-                  type="checkbox"
-                  defaultChecked
-                  data-testid="staged-change-include"
-                  aria-label={`Include ${row.path}`}
-                />
-              </label>
-              <span className="staged-change-path" data-testid="staged-change-path">{row.path}</span>
-              <span className="staged-change-status" data-testid="staged-change-status">{row.status}</span>
-              <span className="staged-change-kind" data-testid="staged-change-kind">{row.kind}</span>
-            </li>
-          ))}
+          {rows.map((row) => {
+            const done = shipped.has(row.path);
+            return (
+              <li
+                key={`${row.status}:${row.path}`}
+                className="staged-change-row"
+                data-testid="staged-change-row"
+                data-path={row.path}
+                data-status={row.status}
+                data-kind={row.kind}
+                data-file-state={done ? 'shipped' : 'pending'}
+              >
+                <label className="staged-change-include">
+                  <input
+                    type="checkbox"
+                    defaultChecked
+                    data-testid="staged-change-include"
+                    aria-label={`Include ${row.path}`}
+                  />
+                </label>
+                <span className="staged-change-path" data-testid="staged-change-path">{row.path}</span>
+                <span className="staged-change-status" data-testid="staged-change-status">{row.status}</span>
+                <span className="staged-change-kind" data-testid="staged-change-kind">{row.kind}</span>
+                {done ? (
+                  <span className="staged-change-shipped" data-testid="staged-change-shipped">done</span>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>
