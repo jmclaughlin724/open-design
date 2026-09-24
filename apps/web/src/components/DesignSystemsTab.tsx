@@ -1236,7 +1236,7 @@ export function DesignSystemsTab({
     // Empty scope — invite the relevant next action. The official scope only
     // runs dry behind a search, and the list column already says so, so this
     // pane stays a quiet placeholder instead of echoing that sentence.
-    const emptyText = designSystemCollection === 'official' ? null : t('dsManager.emptyMine');
+    const emptyText = designSystemCollection === 'official' ? null : t('dsManager.createBody');
     const emptyTitle = designSystemCollection === 'mine'
       ? t('dsManager.createTitle')
       : null;

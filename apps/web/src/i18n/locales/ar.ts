@@ -4343,7 +4343,7 @@ export const ar: Dict = {
   'dsManager.createTitle': 'إنشاء نظام تصميم جديد',
   'dsManager.createBody': 'علّم OpenDesign علامتك التجارية ومنتجك وكودك وأصولك ومراجع التصميم الخاصة بك.',
   'dsManager.createAction': 'إنشاء',
-  'dsManager.emptyMine': 'لا توجد أنظمة تصميم بعد. أنشئ واحدًا من سياق منتج حقيقي، وراجِع المسودة، ثم انشره للمشاريع المستقبلية.',
+  'dsManager.emptyMine': 'لا توجد أنظمة تصميم بعد.',
   'dsManager.badgeDefault': 'افتراضي',
   'dsManager.rowMetaUpdated': 'أنت · تم التحديث {date}',
   'dsManager.edit': 'تعديل',

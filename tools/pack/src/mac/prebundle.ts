@@ -63,7 +63,7 @@ export const MAC_PREBUNDLE_POLICIES = {
     label: "packaged main",
   },
   daemonCli: {
-    externals: ["better-sqlite3", "blake3-wasm", "fsevents", "hyperframes", "node-pty"],
+    externals: ["better-sqlite3", "blake3-wasm", "electron", "fsevents", "hyperframes", "node-pty"],
     forbiddenInputs: [
       "/node_modules/@open-design/daemon/",
       "/node_modules/better-sqlite3/",
@@ -80,7 +80,7 @@ export const MAC_PREBUNDLE_POLICIES = {
     label: "daemon cli",
   },
   daemonSidecar: {
-    externals: ["better-sqlite3", "blake3-wasm", "fsevents", "hyperframes", "node-pty"],
+    externals: ["better-sqlite3", "blake3-wasm", "electron", "fsevents", "hyperframes", "node-pty"],
     forbiddenInputs: [
       "/node_modules/@open-design/daemon/",
       "/node_modules/better-sqlite3/",

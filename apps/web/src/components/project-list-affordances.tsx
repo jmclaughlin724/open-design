@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useI18n } from '../i18n';
 import { localizeSkillName } from '../i18n/content';
+import type { Locale } from '../i18n/types';
 import type { SkillSummary } from '../types';
 import { Icon } from './Icon';
 
@@ -175,24 +176,103 @@ export function projectListLayoutClass(layout: ProjectListLayout): string {
   return layout === 'list' ? 'list' : 'grid';
 }
 
+const PERSONA_TITLE = / like a /i;
+const BRAND_WORDS: Record<string, string> = {
+  opendesign: 'OpenDesign',
+  html: 'HTML',
+  ppt: 'PPT',
+  ui: 'UI',
+  ux: 'UX',
+  api: 'API',
+  dcf: 'DCF',
+  byok: 'BYOK',
+  saas: 'SaaS',
+  '3d': '3D',
+  ai: 'AI',
+  pdf: 'PDF',
+  css: 'CSS',
+  hr: 'HR',
+  github: 'GitHub',
+};
+
+export function isDerivedTemplateExample(id: string): boolean {
+  return id.includes(':');
+}
+
+export function humanizeTemplateId(id: string): string {
+  const leaf = id.split(':').pop() ?? id;
+  return leaf
+    .split('-')
+    .filter(Boolean)
+    .map((word) => BRAND_WORDS[word.toLowerCase()] ?? `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join(' ');
+}
+
+export function templateTitlesFromPlugins(
+  plugins: readonly { id: string; title?: string | null }[],
+): Record<string, string> {
+  const titles: Record<string, string> = {};
+  for (const plugin of plugins) {
+    const title = plugin.title?.trim();
+    if (!title) continue;
+    titles[plugin.id] = title;
+    if (plugin.id.startsWith('example-')) titles[plugin.id.slice('example-'.length)] = title;
+  }
+  return titles;
+}
+
+function usableTemplateTitle(value: string | undefined): string | undefined {
+  const title = value?.trim();
+  if (!title) return undefined;
+  if (PERSONA_TITLE.test(title) || title.length > 48) return undefined;
+  return title;
+}
+
+function naiveTitleCase(id: string): string {
+  const leaf = id.split(':').pop() ?? id;
+  return leaf
+    .split('-')
+    .filter(Boolean)
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join(' ');
+}
+
+export function designTemplateCatalogTitle(
+  template: SkillSummary,
+  titles?: Readonly<Record<string, string>>,
+  locale?: Locale,
+): string {
+  const fromPlugin = usableTemplateTitle(titles?.[template.id] ?? titles?.[`example-${template.id}`]);
+  if (fromPlugin && fromPlugin !== naiveTitleCase(template.id)) return fromPlugin;
+  const localized = locale ? localizeSkillName(locale, template) : template.name;
+  const fromLocale = usableTemplateTitle(
+    localized && localized !== template.id && localized !== template.name ? localized : undefined,
+  );
+  if (fromLocale && fromLocale !== naiveTitleCase(template.id)) return fromLocale;
+  if (template.name && template.name !== template.id && !template.name.includes('-')) {
+    const fromName = usableTemplateTitle(template.name);
+    if (fromName && fromName !== naiveTitleCase(template.id)) return fromName;
+  }
+  return humanizeTemplateId(template.id);
+}
+
 export function ProjectListEmpty({ children }: { children?: ReactNode }) {
   return <p className="recent-projects__empty" data-testid="project-list-empty">{children ?? 'No starred projects.'}</p>;
 }
 
 export function DesignTemplateCatalog({
   templates,
+  titles,
 }: {
   templates: readonly SkillSummary[];
+  titles?: Readonly<Record<string, string>>;
 }) {
   const [starredIds, setStarredIds] = useState<string[]>(() => readStarredIds(STARRED_TEMPLATES_KEY));
   const [starredOnly, setStarredOnly] = useState(false);
   const [layout, setLayout] = useState<ProjectListLayout>('thumbnail');
   const { locale } = useI18n();
   if (templates.length === 0) return null;
-  // Parents that aggregate derived example cards stay out of the gallery —
-  // their preview duplicates one of the derived cards (same rule as
-  // NewProjectPanel and ExamplesTab).
-  const gallery = templates.filter((template) => !template.aggregatesExamples);
+  const gallery = templates.filter((template) => !isDerivedTemplateExample(template.id));
   const visible = filterProjectsByStar(gallery, starredIds, starredOnly);
   return (
     <section className="template-catalog" data-testid="template-catalog" aria-label="Design templates">
@@ -211,7 +291,7 @@ export function DesignTemplateCatalog({
         <ul className="template-catalog__list" data-testid="template-list" data-layout={layout}>
           {visible.map((template) => {
             const starred = starredIds.includes(template.id);
-            const displayName = localizeSkillName(locale, template);
+            const displayName = designTemplateCatalogTitle(template, titles, locale);
             return (
               <li key={template.id} data-template-id={template.id}>
                 {layout === 'list' ? (

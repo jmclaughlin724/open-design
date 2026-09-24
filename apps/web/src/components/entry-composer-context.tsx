@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SkillSummary } from '../types';
 import { Icon, type IconName } from './Icon';
+import { designTemplateCatalogTitle, isDerivedTemplateExample } from './project-list-affordances';
 
 export type EntryComposerChipKind = 'design-system' | 'agent' | 'skill';
 
@@ -66,7 +67,7 @@ export function topDesignTemplateStarters(
   limit = ENTRY_TEMPLATE_STARTER_LIMIT,
 ): SkillSummary[] {
   return templates
-    .filter((template) => !template.aggregatesExamples && template.examplePrompt.trim().length > 0)
+    .filter((template) => !isDerivedTemplateExample(template.id) && !template.aggregatesExamples && template.examplePrompt.trim().length > 0)
     .sort(
       (a, b) =>
         (b.featured ?? 0) - (a.featured ?? 0) || a.name.localeCompare(b.name),
@@ -109,9 +110,11 @@ export function EntryComposerContextChips({ chips }: { chips: readonly EntryComp
 
 export function TemplateStarterChips({
   templates,
+  titles,
   onPick,
 }: {
   templates: readonly SkillSummary[];
+  titles?: Readonly<Record<string, string>>;
   onPick: (template: SkillSummary, prompt: string) => void;
 }) {
   const starters = topDesignTemplateStarters(templates);
@@ -135,7 +138,7 @@ export function TemplateStarterChips({
             title={template.description || prompt}
             onClick={() => onPick(template, prompt)}
           >
-            {template.name}
+            {designTemplateCatalogTitle(template, titles)}
           </button>
         );
       })}

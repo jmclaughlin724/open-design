@@ -4343,7 +4343,7 @@ export const th: Dict = {
   'dsManager.createTitle': 'สร้าง design system ใหม่',
   'dsManager.createBody': 'สอน OpenDesign ให้รู้จักแบรนด์ ผลิตภัณฑ์ โค้ด แอสเซ็ต และข้อมูลอ้างอิงการออกแบบของคุณ',
   'dsManager.createAction': 'สร้าง',
-  'dsManager.emptyMine': 'ยังไม่มี design systems สร้างจากบริบทผลิตภัณฑ์จริง ตรวจสอบฉบับร่าง แล้วเผยแพร่เพื่อใช้กับโปรเจกต์ในอนาคต',
+  'dsManager.emptyMine': 'ยังไม่มี design systems',
   'dsManager.badgeDefault': 'ค่าเริ่มต้น',
   'dsManager.rowMetaUpdated': 'คุณ · อัปเดต {date}',
   'dsManager.edit': 'แก้ไข',

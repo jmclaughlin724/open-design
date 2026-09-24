@@ -371,6 +371,11 @@ async function pruneImgScope(scopePath, reason, removedPaths) {
   }
 }
 
+async function pruneNestedNextSharp(nestedNodeModules, reason, removedPaths) {
+  await removePathAndRecord(path.join(nestedNodeModules, "sharp"), `${reason} sharp`, removedPaths);
+  await pruneImgScope(path.join(nestedNodeModules, "@img"), `${reason} @img sharp`, removedPaths);
+}
+
 async function pruneCopiedSharp(destinationRoot) {
   const nodeModulesRoot = path.join(destinationRoot, "node_modules");
   const pnpmRoot = path.join(nodeModulesRoot, ".pnpm");
@@ -389,9 +394,16 @@ async function pruneCopiedSharp(destinationRoot) {
     }
 
     if (entry.startsWith("next@")) {
-      await removePathAndRecord(path.join(pnpmRoot, entry, "node_modules", "sharp"), "copied next sharp symlink", removedPaths);
+      await pruneNestedNextSharp(path.join(pnpmRoot, entry, "node_modules"), "copied next", removedPaths);
     }
   }
+
+  await pruneNestedNextSharp(path.join(nodeModulesRoot, "next", "node_modules"), "copied hoisted next", removedPaths);
+  await pruneNestedNextSharp(
+    path.join(destinationRoot, "apps", "web", "node_modules", "next", "node_modules"),
+    "copied web next",
+    removedPaths,
+  );
 
   return removedPaths;
 }

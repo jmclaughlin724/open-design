@@ -4733,8 +4733,7 @@ export const zhTW: Dict = {
   "dsManager.createBody":
     "把你的品牌、產品、程式碼、素材與設計參考教給 OpenDesign。",
   "dsManager.createAction": "建立",
-  "dsManager.emptyMine":
-    "還沒有設計體系。從真實的產品脈絡建立一個，審閱草稿後再發佈，供日後的專案使用。",
+  "dsManager.emptyMine": "還沒有設計體系。",
   "dsManager.badgeDefault": "對話預設",
   "dsManager.rowMetaUpdated": "你 · 更新於 {date}",
   "dsManager.edit": "編輯",

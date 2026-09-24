@@ -104,7 +104,7 @@ import {
   StartFromCodeToggle,
   TemplateStarterChips,
 } from './entry-composer-context';
-import { DesignTemplateCatalog } from './project-list-affordances';
+import { DesignTemplateCatalog, templateTitlesFromPlugins } from './project-list-affordances';
 import { useOpenFolderImport } from './useOpenFolderImport';
 import { AppWashKineticGrid } from './AppWashKineticGrid';
 import { findChip, HOME_HERO_CHIPS, type HomeHeroChip } from './home-hero/chips';
@@ -3107,6 +3107,7 @@ export function HomeView({
   );
 
   return (
+    <>
     <div
       className={`home-view${recentProjectsEmpty ? ' home-view--centered' : ''}`}
       data-testid="home-view"
@@ -3146,6 +3147,7 @@ export function HomeView({
             />
             <TemplateStarterChips
               templates={designTemplates}
+              titles={templateTitlesFromPlugins(plugins)}
               onPick={(template, starterPrompt) => {
                 useSkill(template, starterPrompt);
               }}
@@ -3311,8 +3313,6 @@ export function HomeView({
         {...(onRenameProject ? { onRename: onRenameProject } : {})}
       />
       )}
-
-      <DesignTemplateCatalog templates={designTemplates} />
 
       <AnimatePresence>
         {detailsRecord && detailsTemplate ? (
@@ -3525,6 +3525,8 @@ export function HomeView({
         </Dialog>
       ) : null}
     </div>
+    <DesignTemplateCatalog templates={designTemplates} titles={templateTitlesFromPlugins(plugins)} />
+    </>
   );
 }
 

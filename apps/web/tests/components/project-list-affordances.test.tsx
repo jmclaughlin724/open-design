@@ -118,19 +118,30 @@ describe('template catalog affordances', () => {
     expect(screen.getByTestId('template-list-row')).toHaveTextContent('Landing');
   });
 
-  it('hides example-aggregating parents and shows localized display names', () => {
+  it('hides derived example cards and uses plugin titles instead of slugs or persona prompts', () => {
     render(
       <DesignTemplateCatalog
         templates={[
           template('clinical-case-report', 'clinical-case-report', { aggregatesExamples: true }),
           template('clinical-case-report:example-stemi', 'Example Stemi'),
-          template('audio-jingle', 'audio-jingle', { displayName: { en: 'Audio Jingle' } }),
+          template('audio-jingle', 'audio-jingle'),
+          template('magazine-web-ppt', 'magazine-web-ppt', {
+            displayName: { en: 'Write a Brand-to-Revenue Story like a Growth Strategy Lead' },
+          }),
         ]}
+        titles={{
+          'clinical-case-report': 'Clinical Case Report',
+          'audio-jingle': 'Audio Jingle',
+          'magazine-web-ppt': 'Write a Brand-to-Revenue Story like a Growth Strategy Lead',
+        }}
       />,
     );
+    expect(screen.queryByText('Example Stemi')).toBeNull();
     expect(screen.queryByText('clinical-case-report')).toBeNull();
-    expect(screen.getByText('Example Stemi')).toBeTruthy();
-    expect(screen.getByText('Audio Jingle')).toBeTruthy();
     expect(screen.queryByText('audio-jingle')).toBeNull();
+    expect(screen.queryByText('Write a Brand-to-Revenue Story like a Growth Strategy Lead')).toBeNull();
+    expect(screen.getByText('Clinical Case Report')).toBeTruthy();
+    expect(screen.getByText('Audio Jingle')).toBeTruthy();
+    expect(screen.getByText('Magazine Web PPT')).toBeTruthy();
   });
 });

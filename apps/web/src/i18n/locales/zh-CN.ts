@@ -4727,8 +4727,7 @@ export const zhCN: Dict = {
   "dsManager.createBody":
     "把你的品牌、产品、代码、素材和设计参考教给 OpenDesign。",
   "dsManager.createAction": "创建",
-  "dsManager.emptyMine":
-    "还没有设计体系。从真实的产品上下文创建一个，审阅草稿后再发布，供以后的项目使用。",
+  "dsManager.emptyMine": "还没有设计体系。",
   "dsManager.badgeDefault": "对话默认",
   "dsManager.rowMetaUpdated": "你 · 更新于 {date}",
   "dsManager.edit": "编辑",
