@@ -20,6 +20,16 @@
  * Pass `runGh` only from a runner that invokes `gh` with `--repo` and never
  * puts a token on argv. Omit it to refuse PR mode instead of calling the
  * network. Do not edit server.ts from the promotion change itself.
+ *
+ * Confirmation: the body must include `confirmed: true`. The CLI sets that
+ * only after `--yes` (`target-promote-cli.ts`). A web confirm dialog must
+ * POST `{ confirmed: true }` only after the user confirms — `StagedChangesList`
+ * does not promote yet.
+ *
+ * Write guard (parent call, do not put it inside `validateProjectPath` —
+ * that function only sees a relative name). In `writeProjectFile`, immediately
+ * after `const target = await resolveSafeReal(dir, safeName);`:
+ *   assertWriteOutsideBoundTarget(target, boundLocalPath(metadata));
  */
 import type { Express } from 'express';
 import type { JsonValue } from '@open-design/contracts';
@@ -28,6 +38,7 @@ import type { sendApiError as sendApiErrorImpl } from '../http/api-errors.js';
 import { getProject } from '../db.js';
 import { isSafeId, resolveProjectDir } from '../projects.js';
 import { readConnectedTarget, readTargetSnapshot } from '../targets/index.js';
+import { listPromotionAudits } from '../targets/promotion-audit.js';
 import {
   parsePromoteBody,
   promoteTarget,
@@ -51,6 +62,22 @@ export interface RegisterTargetPromoteRoutesDeps {
 
 function projectIdOf(value: string | string[] | undefined): string {
   return typeof value === 'string' ? value : '';
+}
+
+const ACTOR_RE = /^[A-Za-z0-9._-]{1,128}$/;
+const TOKEN_RE = /(?:ghp_|gho_|ghs_|github_pat_)|(?:token|access_token|password)=/i;
+
+function headerOf(req: { get?: (name: string) => string | undefined }, name: string): string {
+  return req.get?.(name)?.trim() ?? '';
+}
+
+/** Workspace member when present, else the CLI actor header, else `local`. */
+export function promoteActor(req: { get?: (name: string) => string | undefined }): string {
+  const member = headerOf(req, 'x-od-workspace-member-id');
+  if (member && ACTOR_RE.test(member) && !TOKEN_RE.test(member)) return member;
+  const actor = headerOf(req, 'x-od-actor');
+  if (actor && ACTOR_RE.test(actor) && !TOKEN_RE.test(actor)) return actor;
+  return 'local';
 }
 
 export function registerTargetPromoteRoutes(
@@ -111,6 +138,7 @@ export function registerTargetPromoteRoutes(
       snapshot,
       runtimeDataDir: ctx.paths.RUNTIME_DATA_DIR_CANONICAL,
       request: parsed.value,
+      actor: promoteActor(req),
       ...(ctx.runGh ? { runGh: ctx.runGh } : {}),
     });
     if (!result.ok) {
@@ -141,6 +169,9 @@ export function registerTargetPromoteRoutes(
     }
     const allowed = await authorizeProjectRequest(req, res, projectId, { mode: 'read' });
     if (!allowed) return;
-    res.json({ promotions: readPromotionHistory(db, projectId) });
+    res.json({
+      promotions: readPromotionHistory(db, projectId),
+      audits: listPromotionAudits(db, projectId),
+    });
   });
 }

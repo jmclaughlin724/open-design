@@ -16,7 +16,8 @@ import {
 } from '../src/db.js';
 import { registerTargetPromoteRoutes } from '../src/routes/target-promote.js';
 import { bindConnectedTarget, captureTargetSnapshot } from '../src/targets/index.js';
-import { promoteTarget, type GhRunner } from '../src/targets/promote.js';
+import { promoteTarget, resetPromotionLocks, type GhRunner } from '../src/targets/promote.js';
+import { listPromotionAudits } from '../src/targets/promotion-audit.js';
 import { runTargetPromote } from '../src/target-promote-cli.js';
 import type { ConnectedTarget } from '@open-design/contracts/api/targets';
 
@@ -33,6 +34,7 @@ afterEach(async () => {
     await new Promise<void>((resolve) => toClose.close(() => resolve()));
   }
   closeDatabase();
+  resetPromotionLocks();
   if (tempDir) rmSync(tempDir, { recursive: true, force: true });
   tempDir = null;
   for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true });
@@ -126,10 +128,16 @@ async function startApi(runGh?: GhRunner) {
     projectsDir,
     dataDir,
     base,
-    async req(route: string, options: { method?: string; body?: unknown } = {}) {
+    async req(
+      route: string,
+      options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+    ) {
       const response = await fetch(`${base}${route}`, {
         method: options.method ?? 'GET',
-        headers: options.body === undefined ? {} : { 'content-type': 'application/json' },
+        headers: {
+          ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
+          ...options.headers,
+        },
         ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
       });
       return { status: response.status, body: await response.json() as Record<string, any> };
@@ -162,6 +170,7 @@ describe('target promotion', () => {
       request: {
         mode: 'branch',
         dryRun: false,
+        confirmed: true,
         overrideDrift: false,
         overrideSecrets: false,
         changeSlug: 'change',
@@ -209,6 +218,7 @@ describe('target promotion', () => {
       request: {
         mode: 'branch',
         dryRun: true,
+        confirmed: true,
         overrideDrift: false,
         overrideSecrets: false,
         runId: null,
@@ -270,6 +280,7 @@ describe('target promotion', () => {
       request: {
         mode: 'branch',
         dryRun: false,
+        confirmed: true,
         overrideDrift: false,
         overrideSecrets: false,
         runId: null,
@@ -286,6 +297,7 @@ describe('target promotion', () => {
       request: {
         mode: 'branch',
         dryRun: false,
+        confirmed: true,
         overrideDrift: true,
         overrideSecrets: false,
         runId: null,
@@ -321,6 +333,7 @@ describe('target promotion', () => {
       request: {
         mode: 'branch',
         dryRun: false,
+        confirmed: true,
         overrideDrift: false,
         overrideSecrets: false,
         runId: null,
@@ -361,6 +374,7 @@ describe('target promotion', () => {
       request: {
         mode: 'copy',
         dryRun: false,
+        confirmed: true,
         overrideDrift: false,
         overrideSecrets: false,
         runId: 'run-copy',
@@ -406,6 +420,7 @@ describe('target promotion', () => {
       request: {
         mode: 'pr',
         dryRun: false,
+        confirmed: true,
         overrideDrift: false,
         overrideSecrets: false,
         runId: 'run-9',
@@ -446,9 +461,16 @@ describe('target promotion', () => {
     expect(token.status).toBe(400);
     expect(token.body.error.message).toBe('unexpected field: token');
 
+    const unconfirmed = await api.req('/api/projects/proj-1/target/promote', {
+      method: 'POST',
+      body: { mode: 'branch' },
+    });
+    expect(unconfirmed.status).toBe(400);
+    expect(unconfirmed.body.error.message).toBe('promote requires explicit confirmation');
+
     const promoted = await api.req('/api/projects/proj-1/target/promote', {
       method: 'POST',
-      body: { mode: 'branch', runId: 'run-1', changeSlug: 'change' },
+      body: { mode: 'branch', confirmed: true, runId: 'run-1', changeSlug: 'change' },
     });
     expect(promoted.status).toBe(200);
     expect(promoted.body.promotion.files).toEqual(['added.txt']);
@@ -480,6 +502,7 @@ describe('target promotion', () => {
       'promote',
       '--project',
       'proj-1',
+      '--yes',
       '--dry-run',
       '--mode',
       'branch',
@@ -499,6 +522,270 @@ describe('target promotion', () => {
     expect(payload.files).toEqual(['added.txt']);
     expect(await git(target, ['rev-parse', 'HEAD'])).toBe(before);
     expect(await git(target, ['branch', '--list', 'od/target-project/change'])).toBe('');
+  });
+
+  it('rejects a promote that is not explicitly confirmed', async () => {
+    const target = makeFolder('od-promote-confirm-');
+    const project = makeFolder('od-promote-confirm-proj-');
+    await initRepo(target);
+    await writeFile(path.join(project, 'keep.txt'), 'keep\n');
+    await writeFile(path.join(project, 'added.txt'), 'from-od\n');
+    const captured = await captureTargetSnapshot({ kind: 'local-folder', localPath: target });
+    expect(captured.ok).toBe(true);
+    if (!captured.ok) return;
+    const db = openDb();
+    const dataDir = path.join(tempDir!, 'data');
+    await mkdir(dataDir, { recursive: true });
+
+    const missing = await promoteTarget({
+      db,
+      projectId: 'proj-1',
+      projectName: 'Target project',
+      projectRoot: project,
+      target: { kind: 'local-folder', localPath: target },
+      snapshot: captured.snapshot,
+      runtimeDataDir: dataDir,
+      request: {
+        mode: 'branch',
+        dryRun: false,
+        confirmed: false,
+        overrideDrift: false,
+        overrideSecrets: false,
+        runId: null,
+      },
+    });
+    expect(missing.ok).toBe(false);
+    if (missing.ok) return;
+    expect(missing.status).toBe(400);
+    expect(missing.message).toBe('promote requires explicit confirmation');
+    expect(await git(target, ['branch', '--list', 'od/target-project/change'])).toBe('');
+    expect(listPromotionAudits(db, 'proj-1')).toEqual([]);
+  });
+
+  it('CLI without --yes does not call the daemon', async () => {
+    let called = false;
+    const result = await runTargetPromote([
+      'promote',
+      '--project',
+      'proj-1',
+      '--dry-run',
+      '--daemon-url',
+      'http://127.0.0.1:9',
+    ], {
+      fetchImpl: async () => {
+        called = true;
+        throw new Error('fetch should not run');
+      },
+      writeOut: () => {},
+      writeErr: () => {},
+    });
+    expect(result.exitCode).toBe(2);
+    expect(called).toBe(false);
+  });
+
+  it('returns 409 when a second promote starts while one is in flight', async () => {
+    const target = makeFolder('od-promote-lock-');
+    const project = makeFolder('od-promote-lock-proj-');
+    await initRepo(target);
+    await writeFile(path.join(project, 'keep.txt'), 'keep\n');
+    await writeFile(path.join(project, 'added.txt'), 'from-od\n');
+    const captured = await captureTargetSnapshot({ kind: 'local-folder', localPath: target });
+    expect(captured.ok).toBe(true);
+    if (!captured.ok) return;
+    const db = openDb();
+    const dataDir = path.join(tempDir!, 'data');
+    await mkdir(dataDir, { recursive: true });
+    let release!: () => void;
+    let held!: () => void;
+    const heldPromise = new Promise<void>((resolve) => {
+      held = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const shared = {
+      db,
+      projectId: 'proj-1',
+      projectName: 'Target project',
+      projectRoot: project,
+      target: { kind: 'local-folder', localPath: target } as ConnectedTarget,
+      snapshot: captured.snapshot,
+      runtimeDataDir: dataDir,
+      request: {
+        mode: 'branch' as const,
+        dryRun: false,
+        confirmed: true,
+        overrideDrift: false,
+        overrideSecrets: false,
+        changeSlug: 'change',
+        runId: 'run-lock',
+      },
+    };
+
+    const first = promoteTarget({
+      ...shared,
+      waitWhileLocked: async () => {
+        held();
+        await gate;
+      },
+    });
+    await heldPromise;
+    const second = await promoteTarget(shared);
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.status).toBe(409);
+    expect(second.message).toBe('promotion already in flight');
+
+    release();
+    const finished = await first;
+    expect(finished.ok).toBe(true);
+    expect(await git(target, ['rev-list', '--count', 'HEAD'])).toBe('2');
+  });
+
+  it('writes an audit record for promote, dry-run, and override', async () => {
+    const target = makeFolder('od-promote-audit-');
+    const project = makeFolder('od-promote-audit-proj-');
+    await initRepo(target);
+    await writeFile(path.join(project, 'keep.txt'), 'keep\n');
+    await writeFile(path.join(project, 'added.txt'), 'from-od\n');
+    const captured = await captureTargetSnapshot({ kind: 'local-folder', localPath: target });
+    expect(captured.ok).toBe(true);
+    if (!captured.ok) return;
+    const db = openDb();
+    const dataDir = path.join(tempDir!, 'data');
+    await mkdir(dataDir, { recursive: true });
+    const base = {
+      db,
+      projectId: 'proj-1',
+      projectName: 'Target project',
+      projectRoot: project,
+      target: { kind: 'local-folder', localPath: target } as ConnectedTarget,
+      snapshot: captured.snapshot,
+      runtimeDataDir: dataDir,
+      actor: 'ada',
+    };
+
+    const dry = await promoteTarget({
+      ...base,
+      request: {
+        mode: 'branch',
+        dryRun: true,
+        confirmed: true,
+        overrideDrift: false,
+        overrideSecrets: false,
+        runId: null,
+      },
+    });
+    expect(dry.ok).toBe(true);
+
+    await writeFile(path.join(target, 'keep.txt'), 'moved\n');
+    await git(target, ['add', 'keep.txt']);
+    await git(target, [
+      '-c', 'user.email=od@example.com',
+      '-c', 'user.name=Open Design',
+      '-c', 'commit.gpgsign=false',
+      'commit',
+      '-m',
+      'drift',
+    ]);
+    const overridden = await promoteTarget({
+      ...base,
+      request: {
+        mode: 'branch',
+        dryRun: false,
+        confirmed: true,
+        overrideDrift: true,
+        overrideSecrets: false,
+        changeSlug: 'override',
+        runId: 'run-override',
+      },
+    });
+    expect(overridden.ok).toBe(true);
+
+    const cleanTarget = makeFolder('od-promote-audit-clean-');
+    const cleanProject = makeFolder('od-promote-audit-clean-proj-');
+    await initRepo(cleanTarget);
+    await writeFile(path.join(cleanProject, 'keep.txt'), 'keep\n');
+    await writeFile(path.join(cleanProject, 'added.txt'), 'from-od\n');
+    const cleanSnap = await captureTargetSnapshot({ kind: 'local-folder', localPath: cleanTarget });
+    expect(cleanSnap.ok).toBe(true);
+    if (!cleanSnap.ok) return;
+    const branched = await promoteTarget({
+      ...base,
+      projectRoot: cleanProject,
+      target: { kind: 'local-folder', localPath: cleanTarget },
+      snapshot: cleanSnap.snapshot,
+      actor: 'ada',
+      request: {
+        mode: 'branch',
+        dryRun: false,
+        confirmed: true,
+        overrideDrift: false,
+        overrideSecrets: false,
+        changeSlug: 'ship',
+        runId: 'run-promote',
+      },
+    });
+    expect(branched.ok).toBe(true);
+
+    const audits = listPromotionAudits(db, 'proj-1');
+    const dryAudit = audits.find((row) => row.action === 'dry-run');
+    const overrideAudit = audits.find((row) => row.action === 'override');
+    const promoteAudit = audits.find((row) => row.action === 'promote' && row.driftDecision === 'clean');
+    expect(dryAudit).toMatchObject({
+      actor: 'ada',
+      mode: 'branch',
+      files: ['added.txt'],
+      driftDecision: 'clean',
+    });
+    expect(overrideAudit).toMatchObject({
+      actor: 'ada',
+      mode: 'branch',
+      files: ['added.txt'],
+      driftDecision: 'override',
+    });
+    expect(promoteAudit).toMatchObject({
+      actor: 'ada',
+      mode: 'branch',
+      files: ['added.txt'],
+      driftDecision: 'clean',
+    });
+    expect(JSON.stringify(audits)).not.toMatch(/ghp_|github_pat_|token=/);
+    expect(JSON.stringify(audits)).not.toContain('token');
+  });
+
+  it('records the workspace member as the promote actor', async () => {
+    const target = makeFolder('od-promote-actor-');
+    const api = await startApi();
+    await initRepo(target);
+    const projectDir = path.join(api.projectsDir, 'proj-1');
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(path.join(projectDir, 'keep.txt'), 'keep\n');
+    await writeFile(path.join(projectDir, 'added.txt'), 'from-od\n');
+    const captured = await captureTargetSnapshot({ kind: 'local-folder', localPath: target });
+    expect(captured.ok).toBe(true);
+    if (!captured.ok) return;
+    bindConnectedTarget(api.db, 'proj-1', { kind: 'local-folder', localPath: target }, captured.snapshot);
+
+    const promoted = await api.req('/api/projects/proj-1/target/promote', {
+      method: 'POST',
+      headers: { 'x-od-workspace-member-id': 'member-ada' },
+      body: { mode: 'branch', confirmed: true, changeSlug: 'actor' },
+    });
+    expect(promoted.status).toBe(200);
+
+    const listed = await api.req('/api/projects/proj-1/target/promotions');
+    expect(listed.status).toBe(200);
+    expect(listed.body.audits).toEqual([
+      expect.objectContaining({
+        actor: 'member-ada',
+        action: 'promote',
+        mode: 'branch',
+        files: ['added.txt'],
+        driftDecision: 'clean',
+      }),
+    ]);
+    expect(JSON.stringify(listed.body)).not.toContain('token');
   });
 });
 

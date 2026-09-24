@@ -16,6 +16,10 @@ import {
 } from './snapshot.js';
 import { summarizeStagedChanges } from './staged-changes.js';
 import {
+  driftDecisionFor,
+  recordPromotionGate,
+} from './promotion-audit.js';
+import {
   insertPromotion,
   listPromotions,
   type PromotionDb,
@@ -40,6 +44,8 @@ export interface PromoteRequest {
   fileIds?: string[];
   mode: PromotionMode;
   dryRun: boolean;
+  /** Explicit confirmation. Missing or false rejects the promote. */
+  confirmed: boolean;
   overrideDrift: boolean;
   overrideSecrets: boolean;
   changeSlug?: string;
@@ -77,6 +83,13 @@ export interface PromoteInput {
   runtimeDataDir: string;
   request: PromoteRequest;
   now?: number;
+  /** Who asked. A workspace member id, `cli`, or `local`. Never a token. */
+  actor?: string;
+  /**
+   * Test hook. Invoked after the in-flight lock is held and before any
+   * target read or write, so a second promote can observe the 409.
+   */
+  waitWhileLocked?: () => Promise<void> | void;
   /**
    * Required for mode `pr`. The default refuses to spawn `gh`, so a test
    * or route must pass a mock. Never pass a token on argv.
@@ -88,6 +101,7 @@ const PROMOTE_KEYS = new Set([
   'fileIds',
   'mode',
   'dryRun',
+  'confirmed',
   'overrideDrift',
   'overrideSecrets',
   'override',
@@ -140,6 +154,9 @@ export function parsePromoteBody(
   }
   if (record.dryRun !== undefined && typeof record.dryRun !== 'boolean') {
     return { ok: false, message: 'dryRun must be a boolean' };
+  }
+  if (record.confirmed !== true) {
+    return { ok: false, message: 'promote requires explicit confirmation' };
   }
   if (record.overrideDrift !== undefined && typeof record.overrideDrift !== 'boolean') {
     return { ok: false, message: 'overrideDrift must be a boolean' };
@@ -197,6 +214,7 @@ export function parsePromoteBody(
       ...(fileIds === undefined ? {} : { fileIds }),
       mode: record.mode,
       dryRun: record.dryRun === true,
+      confirmed: true,
       overrideDrift: record.overrideDrift === true || record.override === true,
       overrideSecrets: record.overrideSecrets === true,
       ...(changeSlug === undefined ? {} : { changeSlug }),
@@ -206,7 +224,48 @@ export function parsePromoteBody(
   };
 }
 
+const inflightPromotions = new Map<string, number>();
+let promotionLockTicket = 0;
+
+function promotionLockKey(projectId: string, target: ConnectedTarget): string {
+  if (target.kind === 'local-folder') return `${projectId}\0local\0${target.localPath}`;
+  return `${projectId}\0github\0${target.owner}/${target.repo}`;
+}
+
+function tryAcquirePromotionLock(key: string): number | null {
+  if (inflightPromotions.has(key)) return null;
+  promotionLockTicket += 1;
+  inflightPromotions.set(key, promotionLockTicket);
+  return promotionLockTicket;
+}
+
+function releasePromotionLock(key: string, ticket: number): void {
+  if (inflightPromotions.get(key) === ticket) inflightPromotions.delete(key);
+}
+
+/** Test isolation. An in-flight ticket from a failed test cannot drop a later lock. */
+export function resetPromotionLocks(): void {
+  inflightPromotions.clear();
+}
+
 export async function promoteTarget(input: PromoteInput): Promise<PromoteResult> {
+  if (input.request.confirmed !== true) {
+    return fail(400, 'BAD_REQUEST', 'promote requires explicit confirmation');
+  }
+  const lockKey = promotionLockKey(input.projectId, input.target);
+  const ticket = tryAcquirePromotionLock(lockKey);
+  if (ticket === null) {
+    return fail(409, 'CONFLICT', 'promotion already in flight');
+  }
+  try {
+    if (input.waitWhileLocked) await input.waitWhileLocked();
+    return await runPromotedTarget(input);
+  } finally {
+    releasePromotionLock(lockKey, ticket);
+  }
+}
+
+async function runPromotedTarget(input: PromoteInput): Promise<PromoteResult> {
   const request = input.request;
   const now = input.now ?? Date.now();
   const projectSlug = promotionSlug(input.projectName || input.projectId);
@@ -237,6 +296,16 @@ export async function promoteTarget(input: PromoteInput): Promise<PromoteResult>
 
   const drift = await readDrift(input.target, input.snapshot);
   if (!drift.ok) return fail(400, 'BAD_REQUEST', drift.message);
+  recordPromotionGate(input.db, {
+    projectId: input.projectId,
+    actor: input.actor ?? 'local',
+    mode: request.mode,
+    files,
+    dryRun: request.dryRun,
+    override: request.overrideDrift || request.overrideSecrets,
+    driftDecision: driftDecisionFor(driftHasConflict(drift.report), request.overrideDrift),
+    timestamp: now,
+  });
   if (driftHasConflict(drift.report) && !request.overrideDrift) {
     return fail(409, 'CONFLICT', 'target drifted since snapshot', { drift: drift.report });
   }

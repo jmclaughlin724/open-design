@@ -29,15 +29,16 @@ export interface TargetPromoteCliDeps {
 }
 
 const USAGE = `Usage:
-  od target promote --project <id> [--files <ids>] [--dry-run]
+  od target promote --project <id> --yes [--files <ids>] [--dry-run]
                     [--mode pr|branch|copy] [--json]
                     [--override-drift] [--change <slug>] [--run <id>]
                     [--daemon-url <url>]
                     [--workspace <id> --workspace-member <id>]
 
-Applies staged files to the connected target. --dry-run prints the file
-list and drift report and does not write. Git targets land on
-od/<slug>/<change>. Non-git folders copy only after a data-dir backup.
+Applies staged files to the connected target. --yes is required,
+including for --dry-run. --dry-run prints the file list and drift
+report and does not write. Git targets land on od/<slug>/<change>.
+Non-git folders copy only after a data-dir backup.
 
 Wire-up (apps/daemon/src/cli.ts runTargetCommand):
   if (args[0] === 'promote') return runTargetPromote(args.slice(1))
@@ -47,6 +48,7 @@ interface ParsedPromoteOptions {
   projectId?: string;
   fileIds: string[];
   dryRun: boolean;
+  yes: boolean;
   mode?: 'pr' | 'branch' | 'copy';
   overrideDrift: boolean;
   changeSlug?: string;
@@ -80,6 +82,7 @@ export function parseTargetPromoteArgs(
   const options: ParsedPromoteOptions = {
     fileIds: [],
     dryRun: false,
+    yes: false,
     overrideDrift: false,
     json: false,
     help: false,
@@ -94,6 +97,8 @@ export function parseTargetPromoteArgs(
       options.json = true;
     } else if (arg === '--dry-run') {
       options.dryRun = true;
+    } else if (arg === '--yes') {
+      options.yes = true;
     } else if (arg === '--override-drift') {
       options.overrideDrift = true;
     } else if (arg === '--project') {
@@ -145,6 +150,7 @@ export function promoteRequestBody(options: ParsedPromoteOptions): Record<string
   return {
     mode: options.mode ?? 'branch',
     dryRun: options.dryRun,
+    confirmed: true,
     ...(options.fileIds.length > 0 ? { fileIds: options.fileIds } : {}),
     ...(options.overrideDrift ? { overrideDrift: true } : {}),
     ...(options.changeSlug === undefined ? {} : { changeSlug: options.changeSlug }),
@@ -164,6 +170,7 @@ export async function runTargetPromote(
     return { exitCode: options.help ? 0 : 2 };
   }
   if (!options.projectId) return fail('target promote requires --project <id>', deps, undefined, undefined, 2);
+  if (!options.yes) return fail('target promote requires --yes', deps, undefined, undefined, 2);
   if (Boolean(options.workspaceId) !== Boolean(options.workspaceMemberId)) {
     return fail('pass --workspace <id> and --workspace-member <id> together', deps, undefined, undefined, 2);
   }
@@ -172,7 +179,10 @@ export async function runTargetPromote(
     const daemonUrl = (
       await resolveDaemonUrl(options.daemonUrl === undefined ? {} : { flagUrl: options.daemonUrl })
     ).replace(/\/$/, '');
-    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      'x-od-actor': 'cli',
+    };
     if (options.workspaceId && options.workspaceMemberId) {
       headers['x-od-workspace-id'] = options.workspaceId;
       headers['x-od-workspace-member-id'] = options.workspaceMemberId;

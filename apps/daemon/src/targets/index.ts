@@ -31,5 +31,13 @@ export {
   readPromotionHistory,
 } from './promote.js';
 export type { GhRunner, PromoteRequest, PromoteResult } from './promote.js';
+export {
+  assertResolvedWriteOutsideBoundTarget,
+  assertWriteOutsideBoundTarget,
+  boundLocalPath,
+  pathIsInsideBoundTarget,
+} from './write-guard.js';
+export { listPromotionAudits, recordPromotionGate } from './promotion-audit.js';
+export type { DriftDecision, PromotionAuditRecord } from './promotion-audit.js';
 export { listPromotions, migratePromotions } from './promotion-store.js';
 export type { PromotionRecord } from './promotion-store.js';
