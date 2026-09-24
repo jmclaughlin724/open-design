@@ -13,13 +13,14 @@ export interface ClaudeDesignImportCliResult {
 }
 
 const USAGE = `Usage:
-  od import claude-design <file...> --project <id> [--json]
+  od import claude-design <file...|url> --project <id> [--json]
                           [--daemon-url <url>]
                           [--workspace <id> --workspace-member <id>]
 
-Import a Claude Design ZIP or one or more loose HTML files into an existing
-project. ZIP stays a single <file>; loose HTML (and sibling assets) may be
-repeated. --json prints the daemon response.
+Import a Claude Design ZIP, one or more loose HTML files, or an http(s) URL
+that serves the HTML, into an existing project. ZIP stays a single <file>;
+loose HTML (and sibling assets) may be repeated; a URL must be the only input.
+--json prints the daemon response.
 
 Wire-up (apps/daemon/src/cli.ts SUBCOMMAND_MAP):
   import: runImport,
@@ -146,6 +147,45 @@ export async function runImport(args: string[]): Promise<ClaudeDesignImportCliRe
     const daemonUrl = (
       await resolveDaemonUrl(options.daemonUrl === undefined ? {} : { flagUrl: options.daemonUrl })
     ).replace(/\/$/, '');
+    const urls = options.files.filter((arg) => /^https?:\/\//i.test(arg));
+    if (urls.length > 0) {
+      if (urls.length !== options.files.length || urls.length !== 1) {
+        return fail('a URL import must be the only input; do not mix URLs with files', undefined, undefined, 2);
+      }
+      const resp = await fetch(`${daemonUrl}/api/import/claude-design`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(options.workspaceId && options.workspaceMemberId
+            ? {
+                'x-od-workspace-id': options.workspaceId,
+                'x-od-workspace-member-id': options.workspaceMemberId,
+              }
+            : {}),
+        },
+        body: JSON.stringify({ projectId: options.projectId, url: urls[0] }),
+      });
+      const payload = await resp.json().catch(() => undefined);
+      if (!resp.ok) {
+        const err = (payload as { error?: { code?: string; message?: string } | string } | undefined)?.error;
+        const message = typeof err === 'string'
+          ? err
+          : err?.message ?? `claude-design import failed: HTTP ${resp.status}`;
+        const code = typeof err === 'string' ? undefined : err?.code;
+        return fail(message, code, resp.status);
+      }
+      if (!payload || typeof payload !== 'object' || typeof (payload as { entryFile?: unknown }).entryFile !== 'string') {
+        return fail('daemon returned a malformed claude-design import response', undefined, resp.status);
+      }
+      if (options.json) {
+        writeJson(payload);
+      } else {
+        const imported = payload as { entryFile: string; files?: string[]; entryKind?: string };
+        const files = Array.isArray(imported.files) ? imported.files.join(', ') : imported.entryFile;
+        process.stdout.write(`imported ${imported.entryFile}${imported.entryKind ? ` (${imported.entryKind})` : ''}: ${files}\n`);
+      }
+      return { exitCode: 0 };
+    }
     const form = new FormData();
     form.append('projectId', options.projectId);
     const zipOnly = options.files.length === 1 && /\.zip$/i.test(options.files[0] ?? '');

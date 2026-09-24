@@ -222,6 +222,7 @@ import {
   deleteProject as deleteProjectApi,
   duplicateProject,
   getProject,
+  importClaudeDesignUrl,
   importClaudeDesignZip,
   importFolderProject,
   invalidatePluginCatalogCache,
@@ -3736,6 +3737,33 @@ function AppInner() {
     }
   }, [rememberLocalProject]);
 
+  const handleImportClaudeDesignUrl = useCallback(async (
+    url: string,
+  ): Promise<ImportClaudeDesignOutcome> => {
+    try {
+      const result = await importClaudeDesignUrl(
+        url,
+        resolvedWorkspaceContextForWrite(workspaceContextStateRef.current),
+      );
+      rememberLocalProject(result.project.id);
+      setProjects((curr) => [
+        result.project,
+        ...curr.filter((p) => p.id !== result.project.id),
+      ]);
+      navigate({
+        kind: 'project',
+        projectId: result.project.id,
+        fileName: result.entryFile,
+      });
+      return { ok: true };
+    } catch (err) {
+      return {
+        ok: false,
+        message: err instanceof Error ? err.message : 'The link could not be imported.',
+      };
+    }
+  }, [rememberLocalProject]);
+
   const handleImportFolder = useCallback(async (baseDir: string) => {
     const result = await importFolderProject(
       { baseDir },
@@ -5653,6 +5681,7 @@ function AppInner() {
         onCreateProject={handleCreateProject}
         onCreatePluginShareProject={handleCreatePluginShareProject}
         onImportClaudeDesign={handleImportClaudeDesign}
+        onImportClaudeDesignUrl={handleImportClaudeDesignUrl}
         onImportFolder={handleImportFolder}
         onImportFolderResponse={handleImportFolderResponse}
         onOpenProject={handleOpenProject}

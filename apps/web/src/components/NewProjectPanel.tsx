@@ -155,6 +155,9 @@ interface Props {
   onImportClaudeDesign?: (
     file: File,
   ) => Promise<ImportClaudeDesignOutcome | void> | ImportClaudeDesignOutcome | void;
+  onImportClaudeDesignUrl?: (
+    url: string,
+  ) => Promise<ImportClaudeDesignOutcome | void> | ImportClaudeDesignOutcome | void;
   // Local-server flow: the daemon-owned native folder picker returns the
   // selected baseDir, then the renderer POSTs `/api/import/folder`.
   onImportFolder?: (baseDir: string) => Promise<void> | void;
@@ -283,6 +286,7 @@ export function NewProjectPanel({
   promptTemplates,
   onCreate,
   onImportClaudeDesign,
+  onImportClaudeDesignUrl,
   onImportFolder,
   onImportFolderResponse,
   mediaProviders,
@@ -297,6 +301,8 @@ export function NewProjectPanel({
   const analytics = useAnalytics();
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importUrl, setImportUrl] = useState('');
+  const [importingUrl, setImportingUrl] = useState(false);
   const [importZipError, setImportZipError] = useState<
     { message: string; details?: string } | null
   >(null);
@@ -853,6 +859,30 @@ export function NewProjectPanel({
     onImportFolderResponse,
   });
 
+  async function handleImportUrlSubmit() {
+    const url = importUrl.trim();
+    if (!url || !onImportClaudeDesignUrl) return;
+    setImportingUrl(true);
+    setImportZipError(null);
+    try {
+      const result = await onImportClaudeDesignUrl(url);
+      if (result?.ok === false) {
+        setImportZipError({
+          message: result.message ? `Import failed: ${result.message}` : 'Import failed',
+          details: result.details,
+        });
+      } else {
+        setImportUrl('');
+      }
+    } catch (err) {
+      setImportZipError({
+        message: err instanceof Error ? `Import failed: ${err.message}` : 'Import failed',
+      });
+    } finally {
+      setImportingUrl(false);
+    }
+  }
+
   return (
     <div className="newproj" data-testid="new-project-panel">
       <div className={`newproj-tabs-shell${tabScroll.left ? ' can-left' : ''}${tabScroll.right ? ' can-right' : ''}`}>
@@ -1155,6 +1185,38 @@ export function NewProjectPanel({
               </span>
             </button>
           </>
+        ) : null}
+        {onImportClaudeDesignUrl ? (
+          <form
+            className="newproj-import-url"
+            data-testid="claude-design-url-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleImportUrlSubmit();
+            }}
+          >
+            <input
+              type="url"
+              value={importUrl}
+              onChange={(event) => setImportUrl(event.target.value)}
+              placeholder={t('newproj.importClaudeUrlPlaceholder')}
+              title={t('newproj.importClaudeUrlTitle')}
+              aria-label={t('newproj.importClaudeUrlTitle')}
+              disabled={importingUrl}
+            />
+            <button
+              type="submit"
+              className="ghost newproj-import"
+              disabled={loading || importingUrl || !importUrl.trim()}
+            >
+              <Icon name="import" size={14} />
+              <span>
+                {importingUrl
+                  ? t('newproj.importingClaudeUrl')
+                  : t('newproj.importClaudeUrl')}
+              </span>
+            </button>
+          </form>
         ) : null}
         {folderImport.available ? (
           <div className="newproj-open-folder">

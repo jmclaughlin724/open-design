@@ -43,6 +43,7 @@ import {
   importClaudeDesignFiles,
   type ClaudeDesignImportResult,
 } from './design/claude-design-import.js';
+import { fetchClaudeDesignHtmlFromUrl } from './design/claude-design-url.js';
 import { authorizeReasoningEgress, sendReasoningEgressDenial } from './reasoning-egress.js';
 import { sandboxImportedProjectRootUnavailableReason } from './sandbox-mode.js';
 import { parseOrchestratorWorkspace } from './workspace-contract.js';
@@ -140,6 +141,13 @@ function claudeDesignProjectId(req: { body?: unknown; query?: unknown }): string
   return trimmed || null;
 }
 
+function claudeDesignHtmlUrl(body: unknown): string | null {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
+  if (!Object.prototype.hasOwnProperty.call(body, 'url')) return null;
+  const value = (body as { url?: unknown }).url;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 function claudeDesignImportPayload(imported: ClaudeDesignImportResult) {
   return {
     entryFile: imported.entryFile,
@@ -212,10 +220,14 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
       let importedProjectDir: string | null = null;
       try {
         const jsonFiles = looseFilesFromJson(req.body);
+        const htmlUrl = claudeDesignHtmlUrl(req.body);
         const zipUploads = uploads.filter((upload) => /\.zip$/i.test(upload.originalName));
         const targetProjectId = claudeDesignProjectId(req);
-        if (uploads.length === 0 && (!jsonFiles || jsonFiles.length === 0)) {
+        if (uploads.length === 0 && (!jsonFiles || jsonFiles.length === 0) && !htmlUrl) {
           return res.status(400).json({ error: 'zip file required' });
+        }
+        if (htmlUrl && (uploads.length > 0 || (jsonFiles && jsonFiles.length > 0))) {
+          return res.status(400).json({ error: 'send a URL on its own, not with files' });
         }
         if (zipUploads.length > 0 && (zipUploads.length !== uploads.length || (jsonFiles && jsonFiles.length > 0))) {
           return res.status(400).json({ error: 'send either a .zip or loose files, not both' });
@@ -235,6 +247,9 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
             });
           }
           if (jsonFiles) loose.push(...jsonFiles);
+          if (htmlUrl) {
+            loose.push(await fetchClaudeDesignHtmlFromUrl(htmlUrl));
+          }
           return importClaudeDesignFiles(loose, dir);
         };
 
@@ -274,6 +289,7 @@ export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps
         const originalName = zipUpload?.originalName
           ?? uploads[0]?.originalName
           ?? jsonFiles?.[0]?.path
+          ?? htmlUrl
           ?? 'Claude Design import';
         const id = randomId();
         const now = Date.now();

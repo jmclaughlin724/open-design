@@ -2405,6 +2405,10 @@ export interface Dict {
   'newproj.importClaudeZip': string;
   'newproj.importClaudeZipTitle': string;
   'newproj.importingClaudeZip': string;
+  'newproj.importClaudeUrl': string;
+  'newproj.importClaudeUrlTitle': string;
+  'newproj.importClaudeUrlPlaceholder': string;
+  'newproj.importingClaudeUrl': string;
   'newproj.privacyFooter': string;
   'newproj.designSystem': string;
   'newproj.dsNoneFreeform': string;

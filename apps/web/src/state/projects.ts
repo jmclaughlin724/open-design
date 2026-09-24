@@ -994,6 +994,35 @@ export async function importClaudeDesignZip(
   };
 }
 
+export async function importClaudeDesignUrl(
+  url: string,
+  workspaceContext?: WorkspaceCollabContext | null,
+): Promise<{ project: Project; conversationId: string; entryFile: string }> {
+  const resp = await fetch('/api/import/claude-design', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(workspaceContext ? workspaceProjectHeaders(workspaceContext) : {}),
+    },
+    body: JSON.stringify({ url }),
+  });
+  if (!resp.ok) {
+    const payload = await resp.json().catch(() => null);
+    const message =
+      payload != null &&
+      typeof payload === 'object' &&
+      typeof (payload as { error?: unknown }).error === 'string'
+        ? (payload as { error: string }).error
+        : `Import failed (${resp.status})`;
+    throw new Error(message);
+  }
+  return (await resp.json()) as {
+    project: Project;
+    conversationId: string;
+    entryFile: string;
+  };
+}
+
 // ---------- templates ----------
 
 /**

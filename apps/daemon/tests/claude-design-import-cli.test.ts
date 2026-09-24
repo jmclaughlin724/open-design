@@ -103,4 +103,47 @@ describe('od import claude-design CLI', () => {
     expect(form.get('files')).toBeNull();
     expect(stdout.join('')).toContain('imported home.dc.html');
   });
+
+  it('POSTs a URL as JSON instead of reading a local file', async () => {
+    const result = await runImport([
+      'claude-design',
+      'https://claude.example/exports/home.dc.html',
+      '--project',
+      'proj-3',
+      '--daemon-url',
+      DAEMON,
+      '--json',
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`${DAEMON}/api/import/claude-design`);
+    expect(init.method).toBe('POST');
+    expect(new Headers(init.headers).get('content-type')).toBe('application/json');
+    expect(JSON.parse(String(init.body))).toEqual({
+      projectId: 'proj-3',
+      url: 'https://claude.example/exports/home.dc.html',
+    });
+    expect(stdout.join('')).toContain('"entryFile":"home.dc.html"');
+  });
+
+  it('rejects mixing a URL with files', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'cd-cli-mix-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, 'home.html');
+    writeFileSync(file, '<html></html>');
+
+    const result = await runImport([
+      'claude-design',
+      'https://claude.example/x.html',
+      file,
+      '--project',
+      'proj-4',
+      '--daemon-url',
+      DAEMON,
+    ]);
+
+    expect(result.exitCode).toBe(2);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

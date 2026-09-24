@@ -850,6 +850,47 @@ describe('NewProjectPanel folder import feedback', () => {
     expect(await screen.findByText('Import failed: unsupported zip contents')).toBeTruthy();
   });
 
+  it('submits a Claude Design HTML link through onImportClaudeDesignUrl', async () => {
+    const onImportClaudeDesignUrl = vi.fn().mockResolvedValue({ ok: true });
+
+    render(
+      <NewProjectPanel
+        skills={skills}
+        designSystems={designSystems}
+        defaultDesignSystemId="clay"
+        templates={templates}
+        onDeleteTemplate={vi.fn()}
+        promptTemplates={[]}
+        onCreate={vi.fn()}
+        onImportClaudeDesignUrl={onImportClaudeDesignUrl}
+      />,
+    );
+
+    const input = screen.getByLabelText('Import Claude Design HTML from a link');
+    fireEvent.change(input, { target: { value: 'https://claude.example/export.html' } });
+    fireEvent.submit(input.closest('form')!);
+
+    expect(onImportClaudeDesignUrl).toHaveBeenCalledWith('https://claude.example/export.html');
+    await waitFor(() => {
+      expect((input as HTMLInputElement).value).toBe('');
+    });
+  });
+
+  it('does not render the link form without onImportClaudeDesignUrl', () => {
+    render(
+      <NewProjectPanel
+        skills={skills}
+        designSystems={designSystems}
+        defaultDesignSystemId="clay"
+        templates={templates}
+        onDeleteTemplate={vi.fn()}
+        promptTemplates={[]}
+        onCreate={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('claude-design-url-form')).toBeNull();
+  });
+
   it('shows an error when folder picker import rejects with a daemon message', async () => {
     const onImportFolder = vi.fn().mockRejectedValue(new Error('folder not found'));
     vi.stubGlobal('fetch', vi.fn<typeof fetch>(async (url) => {
