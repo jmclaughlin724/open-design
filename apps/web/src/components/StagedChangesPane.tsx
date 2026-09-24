@@ -42,6 +42,8 @@ export async function fetchShippedPaths(
   }
 }
 
+const EMPTY_STAGED_CHANGES: StagedChangesSummary = { added: [], changed: [], removed: [] };
+
 export async function fetchStagedChanges(
   projectId: string,
   init: { fetchImpl?: typeof fetch; baseUrl?: string } = {},
@@ -52,6 +54,7 @@ export async function fetchStagedChanges(
     `${baseUrl}/api/projects/${encodeURIComponent(projectId)}/target/changes`,
   );
   const payload: unknown = await response.json().catch(() => undefined);
+  if (response.status === 404) return EMPTY_STAGED_CHANGES;
   if (!response.ok || !isStagedChangesSummary(payload)) {
     throw new Error(`staged changes failed: HTTP ${response.status}`);
   }

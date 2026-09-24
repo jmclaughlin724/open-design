@@ -1752,7 +1752,8 @@ function projectEventToAgentEvent(evt: ProjectEvent): LiveArtifactEventItem['eve
     evt.type === 'comment-changed' ||
     evt.type === 'presence-changed' ||
     evt.type === 'project-metadata-changed' ||
-    evt.type === 'project-content-transfer-state'
+    evt.type === 'project-content-transfer-state' ||
+    evt.type === 'promotion_status'
   ) {
     return null;
   }
