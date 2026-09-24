@@ -230,6 +230,34 @@ export interface PlanUpdateSsePayload {
   todos: PlanTodoSnapshotItem[];
 }
 
+export type PromotionPrState = 'open' | 'merged' | 'closed' | 'none';
+
+export type PromotionCheckState = 'pending' | 'passing' | 'failing' | 'none';
+
+export interface PromotionStatusFile {
+  path: string;
+  /** `shipped` when promotion history contains the path; otherwise `pending`. */
+  state: 'pending' | 'shipped';
+}
+
+/**
+ * PR/CI status for one promotion. The poller emits this document; the
+ * chat-run sender publishes it. Poll only — no webhooks. Live-only.
+ */
+export interface PromotionStatusSsePayload {
+  projectId: string;
+  promotionId: string;
+  runId?: string;
+  prUrl: string | null;
+  prState: PromotionPrState;
+  checks: PromotionCheckState;
+  /** True while the parent should keep polling this promotion. */
+  open: boolean;
+  files: PromotionStatusFile[];
+  /** Unchanged shipped paths a later re-promote should skip. */
+  skip: string[];
+}
+
 export type ChatSseEvent =
   | SseTransportEvent<'start', ChatSseStartPayload>
   | SseTransportEvent<'agent', DaemonAgentPayload>
@@ -238,5 +266,6 @@ export type ChatSseEvent =
   | SseTransportEvent<'diagnostic', ChatSseDiagnosticPayload>
   | SseTransportEvent<'tool_activity', ToolActivitySsePayload>
   | SseTransportEvent<'plan_update', PlanUpdateSsePayload>
+  | SseTransportEvent<'promotion_status', PromotionStatusSsePayload>
   | SseTransportEvent<'error', SseErrorPayload>
   | SseTransportEvent<'end', ChatSseEndPayload>;

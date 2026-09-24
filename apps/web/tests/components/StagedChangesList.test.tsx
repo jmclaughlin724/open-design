@@ -27,6 +27,17 @@ describe('StagedChangesList', () => {
     expect(markup).not.toContain('Promote');
   });
 
+  it('shows files from promotion history as done', () => {
+    const markup = renderToStaticMarkup(
+      <StagedChangesList summary={summary} shippedPaths={['src/App.tsx']} />,
+    );
+    expect(markup).toContain('data-file-state="shipped"');
+    expect(markup).toContain('data-testid="staged-change-shipped"');
+    expect(markup).toContain('>done<');
+    expect(markup).toContain('data-file-state="pending"');
+    expect(markup.match(/data-testid="staged-change-shipped"/g)).toHaveLength(1);
+  });
+
   it('renders an empty state when nothing is staged', () => {
     const markup = renderToStaticMarkup(
       <StagedChangesList summary={{ added: [], changed: [], removed: [] }} />,

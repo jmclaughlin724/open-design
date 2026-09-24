@@ -41,3 +41,14 @@ export { listPromotionAudits, recordPromotionGate } from './promotion-audit.js';
 export type { DriftDecision, PromotionAuditRecord } from './promotion-audit.js';
 export { listPromotions, migratePromotions } from './promotion-store.js';
 export type { PromotionRecord } from './promotion-store.js';
+export {
+  PROMOTION_POLL_INTERVAL_MS,
+  createPromotionStatusPoller,
+  markShippedFiles,
+  promotionPollDue,
+  unchangedShippedSkipList,
+} from './promotion-loop.js';
+export type {
+  PromotionStatusDocument,
+  PromotionStatusPoller,
+} from './promotion-loop.js';
