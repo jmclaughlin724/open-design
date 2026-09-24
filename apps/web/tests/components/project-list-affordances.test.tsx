@@ -16,7 +16,7 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-function template(id: string, name: string): SkillSummary {
+function template(id: string, name: string, overrides: Partial<SkillSummary> = {}): SkillSummary {
   return {
     id,
     name,
@@ -30,6 +30,7 @@ function template(id: string, name: string): SkillSummary {
     hasBody: true,
     examplePrompt: `Make ${name}`,
     aggregatesExamples: false,
+    ...overrides,
   };
 }
 
@@ -115,5 +116,21 @@ describe('template catalog affordances', () => {
     fireEvent.click(screen.getByTestId('project-list-layout-list'));
     expect(screen.getByTestId('template-list')).toHaveAttribute('data-layout', 'list');
     expect(screen.getByTestId('template-list-row')).toHaveTextContent('Landing');
+  });
+
+  it('hides example-aggregating parents and shows localized display names', () => {
+    render(
+      <DesignTemplateCatalog
+        templates={[
+          template('clinical-case-report', 'clinical-case-report', { aggregatesExamples: true }),
+          template('clinical-case-report:example-stemi', 'Example Stemi'),
+          template('audio-jingle', 'audio-jingle', { displayName: { en: 'Audio Jingle' } }),
+        ]}
+      />,
+    );
+    expect(screen.queryByText('clinical-case-report')).toBeNull();
+    expect(screen.getByText('Example Stemi')).toBeTruthy();
+    expect(screen.getByText('Audio Jingle')).toBeTruthy();
+    expect(screen.queryByText('audio-jingle')).toBeNull();
   });
 });

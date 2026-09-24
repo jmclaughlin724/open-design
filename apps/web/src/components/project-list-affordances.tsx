@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from 'react';
+import { useI18n } from '../i18n';
+import { localizeSkillName } from '../i18n/content';
 import type { SkillSummary } from '../types';
 import { Icon } from './Icon';
 
@@ -185,8 +187,13 @@ export function DesignTemplateCatalog({
   const [starredIds, setStarredIds] = useState<string[]>(() => readStarredIds(STARRED_TEMPLATES_KEY));
   const [starredOnly, setStarredOnly] = useState(false);
   const [layout, setLayout] = useState<ProjectListLayout>('thumbnail');
+  const { locale } = useI18n();
   if (templates.length === 0) return null;
-  const visible = filterProjectsByStar(templates, starredIds, starredOnly);
+  // Parents that aggregate derived example cards stay out of the gallery —
+  // their preview duplicates one of the derived cards (same rule as
+  // NewProjectPanel and ExamplesTab).
+  const gallery = templates.filter((template) => !template.aggregatesExamples);
+  const visible = filterProjectsByStar(gallery, starredIds, starredOnly);
   return (
     <section className="template-catalog" data-testid="template-catalog" aria-label="Design templates">
       <header className="template-catalog__head">
@@ -204,19 +211,20 @@ export function DesignTemplateCatalog({
         <ul className="template-catalog__list" data-testid="template-list" data-layout={layout}>
           {visible.map((template) => {
             const starred = starredIds.includes(template.id);
+            const displayName = localizeSkillName(locale, template);
             return (
               <li key={template.id} data-template-id={template.id}>
                 {layout === 'list' ? (
-                  <span data-testid="template-list-row">{template.name}</span>
+                  <span data-testid="template-list-row">{displayName}</span>
                 ) : (
                   <span className="template-catalog__thumb" data-testid="template-thumb-fallback">
                     <Icon name="artboard" size={22} />
                   </span>
                 )}
-                <span>{template.name}</span>
+                <span>{displayName}</span>
                 <ProjectListStarButton
                   starred={starred}
-                  name={template.name}
+                  name={displayName}
                   onToggle={() => {
                     setStarredIds((current) => {
                       const next = toggleStarredProjectId(template.id, current);
