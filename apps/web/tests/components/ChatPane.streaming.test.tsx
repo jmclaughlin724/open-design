@@ -373,6 +373,31 @@ describe('ChatPane streaming state', () => {
       .toBeNull();
   });
 
+  it('does not surface the generic failure card for the brand browser-assist hand-off', () => {
+    const handoff: ChatMessage = {
+      id: 'assistant-assist',
+      role: 'assistant',
+      content:
+        'The automatic pass needs a hand.\n\nI could not finish extracting https://example.com/ automatically.\n\n<od-card type="brand-browser-assist">{"brandId":"example-1","browserTabId":"__browser__:1","url":"https://example.com/"}</od-card>',
+      createdAt: 1,
+      runStatus: 'failed',
+    };
+    const messages: ChatMessage[] = [
+      { id: 'user-1', role: 'user', content: 'Extract a design system from https://example.com/.', createdAt: 0 },
+      handoff,
+    ];
+
+    expect(retryableAssistantMessage(messages, handoff.id, false)).toBeNull();
+
+    const textOnly: ChatMessage = {
+      ...handoff,
+      id: 'assistant-assist-text',
+      content:
+        'The automatic pass needs a hand. Use the browser assist card below to open Browser, click More > Download Page, then Continue extraction.',
+    };
+    expect(retryableAssistantMessage([messages[0]!, textOnly], textOnly.id, false)).toBeNull();
+  });
+
   it('hides a stale run-recovery card after a later assistant run succeeds', () => {
     const restartError = 'Run interrupted because the daemon restarted.';
     const messages: ChatMessage[] = [

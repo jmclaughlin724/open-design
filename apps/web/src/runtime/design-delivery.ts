@@ -44,6 +44,25 @@ export function isRetryableAssistantTerminalFailure(
 }
 
 /**
+ * The brand extraction stalled path is terminal as a run (`failed`, so the row
+ * stops counting up) but is an intentional hand-off, not a defect: the daemon
+ * writes the browser-assist recovery card into the same message. A failure
+ * anchor that selects it renders a second, contradictory "task could not be
+ * completed" card next to that hand-off, so failure surfaces skip it. Mirrors
+ * the detection AssistantMessage applies for its own runSucceeded forgiveness.
+ */
+export function isBrandBrowserAssistHandoff(content: string): boolean {
+  if (content.includes('<od-card type="brand-browser-assist"')) return true;
+  if (!content.trim()) return false;
+  return (
+    /browser assist card|browser assist/i.test(content) ||
+    /浏览器辅助卡片|瀏覽器輔助卡片/.test(content) ||
+    /More\s*>\s*Download Page/i.test(content) ||
+    /More\s*>\s*(下载页面|下載頁面)/.test(content)
+  );
+}
+
+/**
  * A bare open-tag scan is not enough: a turn that needed no clarification can
  * narrate its decision straight into a `<question-form>` tag, and treating
  * that prose as an ask latches the turn to `awaiting_input` no matter what it

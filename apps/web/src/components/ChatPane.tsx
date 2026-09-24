@@ -91,7 +91,7 @@ import { useI18n, useT } from '../i18n';
 import { startersForProduct, type ProductType } from '../onboarding/recommendation';
 import { starterCopyFor } from '../onboarding/starter-copy';
 import type { DesignToolboxActionId } from '../runtime/design-toolbox';
-import { isRetryableAssistantTerminalFailure } from '../runtime/design-delivery';
+import { isBrandBrowserAssistHandoff, isRetryableAssistantTerminalFailure } from '../runtime/design-delivery';
 import {
   formatAttachmentSize,
   formatMessageClock,
@@ -6560,6 +6560,10 @@ export function retryableAssistantMessage(
   // 不是同一份转录,宁可不画。宿主卡透明之后能对上的那一侧是「最后一条真跑过的助手
   // 消息」,所以这里**新增**一条,不动原来那条。
   if (last.id !== lastAssistantId && last.id !== lastTurnAssistantId) return null;
+  // A brand extraction that stalled into the browser-assist hand-off is not a
+  // defect for the generic failure card to own; its message already carries the
+  // recovery path (design-delivery.ts).
+  if (isBrandBrowserAssistHandoff(last.content)) return null;
   return isRetryableAssistantTerminalFailure(last) ? last : null;
 }
 
