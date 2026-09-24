@@ -74,6 +74,29 @@ export async function persistDesignContext(
   return document;
 }
 
+/** Compact system-prompt digest. Empty when the document has nothing to say. */
+export function formatDesignContextDigest(document: DesignContext): string {
+  const lines: string[] = [];
+  if (document.sourcePath) lines.push(`Source: ${document.sourcePath}`);
+  if (document.headings.length > 0) {
+    lines.push('Structure:');
+    for (const heading of document.headings.slice(0, 24)) {
+      lines.push(`${'  '.repeat(Math.max(0, heading.level - 1))}- h${heading.level} ${heading.text}`);
+    }
+  }
+  if (document.cssCustomProperties.length > 0) {
+    lines.push('Palette:');
+    for (const token of document.cssCustomProperties.slice(0, 32)) {
+      lines.push(`- ${token.name}: ${token.value}`);
+    }
+  }
+  if (document.imagePaths.length > 0) {
+    lines.push('Images:');
+    for (const image of document.imagePaths.slice(0, 16)) lines.push(`- ${image}`);
+  }
+  return lines.join('\n');
+}
+
 function withoutNonStyleNoise(html: string): string {
   return html
     .replace(/<!--[\s\S]*?-->/g, '')

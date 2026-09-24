@@ -749,10 +749,10 @@ clean one; report present in dry-run output.
 - [x] D4 Workspace-default design system + starred filter + thumbnails
 - [x] E1 Absorb pipeline (raw HTML ingest + normalization) *(merged)*
 - [x] E2 File-kind detection *(merged)*
-- [x] E3 Context extraction *(route, CLI, MCP, and skill wired; prompt digest still open)*
+- [x] E3 Context extraction *(route, CLI, MCP, skill, and classic prompt digest wired; OD Next prompt does not carry it yet)*
 - [x] E4 Claude Design HTML → design-system source adapter *(importer calls the adapter on ZIP and loose HTML)*
 - [x] F1 Connected-target model *(merged, `od target` wired)*
-- [x] F2 Target context acquisition *(local-folder route and `od target context` wired; GitHub fetch still open)*
+- [x] F2 Target context acquisition *(local-folder route, `od target context`, and classic prompt digest wired; GitHub fetch still open)*
 - [x] F3 Base snapshot + drift detection *(merged into the existing target registrar)*
 - [x] F4 Change kinds + staged-changes view *(route, pane, and `od target changes` wired)*
 - [x] F5 Promotion engine *(`od target promote` wired; secret scan, drift block, and design check run before write)*

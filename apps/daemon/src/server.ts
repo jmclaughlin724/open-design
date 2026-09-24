@@ -603,6 +603,7 @@ import {
 } from './connectionTest.js';
 import { listProviderModels } from './integrations/provider-models.js';
 import { importClaudeDesignZip } from './design/index.js';
+import { readRunPromptDigests } from './design/prompt-digests.js';
 import {
   defaultBaseUrlForFinalizeProtocol,
   finalizeDesignPackage,
@@ -9763,6 +9764,18 @@ export async function startServer({
       userInstructions = appConfigForPrompt.customInstructions;
     }
     const projectInstructions = project?.customInstructions ?? '';
+    let designContextDigest: string | undefined;
+    let targetContextDigest: string | undefined;
+    if (project?.id) {
+      try {
+        const promptRoot = resolveProjectDir(PROJECTS_DIR, project.id, project.metadata);
+        const digests = await readRunPromptDigests(promptRoot);
+        designContextDigest = digests.designContextDigest;
+        targetContextDigest = digests.targetContextDigest;
+      } catch {
+        // A missing project folder omits the digests. It does not fail the run.
+      }
+    }
 
     let designSystemBody;
     let designSystemTitle;
@@ -10073,6 +10086,8 @@ export async function startServer({
       designSystemFixtureHtml,
       designSystemPullIndex,
       designSystemImportMode,
+      ...(designContextDigest ? { designContextDigest } : {}),
+      ...(targetContextDigest ? { targetContextDigest } : {}),
       craftBody,
       craftSections,
       memoryBody,

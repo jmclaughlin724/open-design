@@ -849,9 +849,9 @@ export interface ComposeInput {
   // so the block is absent. Format with `formatTargetContextDigest` from
   // `targets/target-context.ts`. Caller injection site: apps/daemon/src/server.ts
   // `defaultSystemPromptInputs` beside `designSystemBody` (~line 10039).
-  // OD Next cannot carry it until `OdNextStrategyStableRequestContextV2`
-  // grows the field; that object is `odNextStableRequestContext` (~line 10143).
   targetContextDigest?: string | undefined;
+  /** Compact absorbed-file digest. Omit when `context/design-context.json` is absent. */
+  designContextDigest?: string | undefined;
 }
 
 export function composeSystemPrompt({
@@ -895,6 +895,7 @@ export function composeSystemPrompt({
   mediaHintSignal,
   platformHintSignal,
   targetContextDigest,
+  designContextDigest,
 }: ComposeInput): string {
   if (odNextStrategyRecipe) {
     return composeOdNextStrategyRequestPromptV2(odNextStrategyRecipe, {
@@ -1258,6 +1259,13 @@ export function composeSystemPrompt({
   if (designSystemPullIndex && designSystemPullIndex.trim().length > 0) {
     parts.push(
       `\n\n## Pull-layer files available on demand${designSystemTitle ? ` — ${designSystemTitle}` : ''}\n\nThis design-system package declares richer files for inspection, source evidence, or human preview. Keep the push prompt light: use the index below to decide what to read later. When the runtime tool environment is available, read a listed path with \`\"$OD_NODE_BIN\" \"$OD_BIN\" tools design-systems read --path <path>\`; the daemon will reject paths outside this manifest allowlist.\n\n\`\`\`text\n${designSystemPullIndex.trim()}\n\`\`\``,
+    );
+  }
+
+  const designDigest = designContextDigest?.trim();
+  if (designDigest) {
+    parts.push(
+      `\n\n## Absorbed design context\n\nUse this digest when iterating on absorbed HTML. Do not restyle against a guessed palette.\n\n${designDigest}`,
     );
   }
 
