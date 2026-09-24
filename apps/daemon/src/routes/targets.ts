@@ -46,6 +46,8 @@ export interface RegisterTargetRoutesDeps {
     getProject: typeof getProject;
   };
   authorizeProjectRequest: AuthorizeProjectRequest;
+  /** Optional. Bind stays successful if this throws. */
+  afterBind?: (projectId: string, metadata: unknown) => Promise<void>;
 }
 
 function projectIdOf(value: string | string[] | undefined): string {
@@ -159,6 +161,13 @@ export function registerTargetRoutes(app: Express, ctx: RegisterTargetRoutesDeps
     const bound = bindConnectedTarget(db, projectId, target, captured.snapshot);
     if (!bound) {
       return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+    }
+    if (ctx.afterBind) {
+      try {
+        await ctx.afterBind(projectId, readProject(db, projectId)?.metadata);
+      } catch {
+        // Context regeneration is not the bind result.
+      }
     }
     const body: BindConnectedTargetResponse = { target: bound };
     res.json(body);

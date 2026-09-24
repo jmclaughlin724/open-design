@@ -39,9 +39,14 @@ function isTargetContext(value: unknown): value is TargetContext {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as TargetContext;
   const stack = record.stack;
+  const kindOk = record.targetKind === 'local-folder'
+    ? typeof record.localPath === 'string'
+    : record.targetKind === 'github-repo'
+      && typeof record.owner === 'string'
+      && typeof record.repo === 'string'
+      && typeof record.ref === 'string';
   return record.schemaVersion === 1
-    && record.targetKind === 'local-folder'
-    && typeof record.localPath === 'string'
+    && kindOk
     && !!stack
     && typeof stack === 'object'
     && Array.isArray(stack.dependencies)

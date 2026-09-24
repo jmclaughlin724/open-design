@@ -738,7 +738,7 @@ clean one; report present in dry-run output.
 - [x] A1 Token usage/derivation/relations *(done — local)*
 - [x] A2 DESIGN.md section schema *(done — local)*
 - [x] B1 check_design_system tool *(route, CLI, MCP, and skill wired; screenshot-free)*
-- [x] B2 render_probe tool *(HTML-parse route, CLI, MCP, and skill wired; no screenshot)*
+- [x] B2 render_probe tool *(HTML-parse route, CLI, MCP, and skill wired; screenshot capture is not implemented)*
 - [x] B3 SSE roll-ups + todo events *(merged, wired into emitAgentEvent)*
 - [x] C1 Anchor-stable comments *(merged)*
 - [x] C2 Per-project preview tokens *(merged, wired before static serve)*
@@ -749,10 +749,10 @@ clean one; report present in dry-run output.
 - [x] D4 Workspace-default design system + starred filter + thumbnails
 - [x] E1 Absorb pipeline (raw HTML ingest + normalization) *(merged)*
 - [x] E2 File-kind detection *(merged)*
-- [x] E3 Context extraction *(route, CLI, MCP, skill, and classic prompt digest wired; OD Next prompt does not carry it yet)*
+- [x] E3 Context extraction *(route, CLI, MCP, skill, and both prompt composers wired)*
 - [x] E4 Claude Design HTML → design-system source adapter *(importer calls the adapter on ZIP and loose HTML)*
 - [x] F1 Connected-target model *(merged, `od target` wired)*
-- [x] F2 Target context acquisition *(local-folder route, `od target context`, and classic prompt digest wired; GitHub fetch still open)*
+- [x] F2 Target context acquisition *(local folder and GitHub codeload fetch, `od target context`, re-bind, and both prompt composers wired; no token on the URL)*
 - [x] F3 Base snapshot + drift detection *(merged into the existing target registrar)*
 - [x] F4 Change kinds + staged-changes view *(route, pane, and `od target changes` wired)*
 - [x] F5 Promotion engine *(`od target promote` wired; secret scan, drift block, and design check run before write)*

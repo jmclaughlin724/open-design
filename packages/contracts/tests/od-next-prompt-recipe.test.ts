@@ -614,6 +614,14 @@ describe('handheld device shell in the stable request context', () => {
     expect(composeOdNextStrategyStableRequestContextV2({ memoryBody: 'Remember the operator audience.' }))
       .not.toContain('device-frame');
     expect(composeOdNextStrategyStableRequestContextV2({})).toBe('');
+    expect(composeOdNextStrategyStableRequestContextV2({
+      designContextDigest: 'Hero',
+      targetContextDigest: '--bg',
+    })).toContain('name="connected-target"');
+    expect(composeOdNextStrategyStableRequestContextV2({
+      designContextDigest: 'Hero',
+      targetContextDigest: '--bg',
+    })).toContain('name="absorbed-design-context"');
   });
 });
 

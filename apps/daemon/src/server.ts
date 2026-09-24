@@ -604,6 +604,7 @@ import {
 import { listProviderModels } from './integrations/provider-models.js';
 import { importClaudeDesignZip } from './design/index.js';
 import { readRunPromptDigests } from './design/prompt-digests.js';
+import { acquireTargetContext } from './targets/target-context.js';
 import {
   defaultBaseUrlForFinalizeProtocol,
   finalizeDesignPackage,
@@ -8477,6 +8478,14 @@ export async function startServer({
     auth: authDeps,
     projectStore: projectStoreDeps,
     authorizeProjectRequest,
+    afterBind: async (projectId, metadata) => {
+      await acquireTargetContext({
+        projectsRoot: PROJECTS_DIR,
+        projectId,
+        metadata,
+        runtimeDataDir: RUNTIME_DATA_DIR_CANONICAL,
+      });
+    },
   });
   registerTargetContextRoutes(app, {
     db,
@@ -10192,6 +10201,8 @@ export async function startServer({
           designSystemFixtureHtml,
           designSystemPullIndex,
           designSystemImportMode,
+          ...(designContextDigest ? { designContextDigest } : {}),
+          ...(targetContextDigest ? { targetContextDigest } : {}),
           craftBody,
           craftSections,
           memoryBody,

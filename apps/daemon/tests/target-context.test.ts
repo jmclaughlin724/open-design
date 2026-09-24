@@ -13,6 +13,7 @@ import {
   TARGET_CONTEXT_RELATIVE_PATH,
   acquireTargetContext,
   formatTargetContextDigest,
+  githubTargetArchiveUrl,
 } from '../src/targets/target-context.js';
 
 vi.mock('../src/daemon-url.js', () => ({
@@ -123,7 +124,43 @@ describe('target context acquisition', () => {
     expect(github.ok).toBe(false);
     if (github.ok) return;
     expect(github.status).toBe(400);
-    expect(github.message).toMatch(/local-folder/);
+    expect(github.message).toMatch(/runtime data dir/);
+  });
+
+  it('extracts a github tarball without putting a token on the URL', async () => {
+    const source = mkdtempSync(path.join(os.tmpdir(), 'od-target-context-gh-src-'));
+    const projects = mkdtempSync(path.join(os.tmpdir(), 'od-target-context-gh-proj-'));
+    const runtime = path.join(projects, 'runtime');
+    folders.push(source, projects);
+    writeFixture(source);
+    mkdirSync(runtime, { recursive: true });
+    const archive = path.join(projects, 'widgets.tgz');
+    const { create } = await import('tar');
+    await create({ cwd: source, file: archive, gzip: true, prefix: 'widgets-main' }, ['.']);
+    const calls: string[] = [];
+    const acquired = await acquireTargetContext({
+      projectsRoot: projects,
+      projectId: 'proj-1',
+      metadata: {
+        kind: 'prototype',
+        connectedTarget: { kind: 'github-repo', owner: 'acme', repo: 'widgets', defaultBranch: 'main' },
+      },
+      runtimeDataDir: runtime,
+      fetchArchive: async (url) => {
+        calls.push(url);
+        return { ok: true, status: 200, body: readFileSync(archive) };
+      },
+    });
+    expect(calls).toEqual(['https://codeload.github.com/acme/widgets/tar.gz/main']);
+    expect(acquired.ok).toBe(true);
+    if (!acquired.ok) return;
+    expect(acquired.document.targetKind).toBe('github-repo');
+    if (acquired.document.targetKind !== 'github-repo') return;
+    expect(acquired.document.owner).toBe('acme');
+    expect(acquired.document.ref).toBe('main');
+    expect(acquired.document.headings).toEqual([{ level: 1, text: 'Inbox' }]);
+    expect(acquired.document).not.toHaveProperty('localPath');
+    expect(githubTargetArchiveUrl('acme', 'widgets', 'ghp_secret')).toBeNull();
   });
 });
 
