@@ -20,6 +20,7 @@ await build({
     "./src/api/touchpointTestRuntime.ts",
     "./src/api/targets.ts",
     "./src/api/design-system-check.ts",
+    "./src/api/template-from-file.ts",
     "./src/runtime/deck-stage-fallback.ts",
     "./src/runtime/deck-protocol.ts",
     "./src/runtime/preview-observability.ts",

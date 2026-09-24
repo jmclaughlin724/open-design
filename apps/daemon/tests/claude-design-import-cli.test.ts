@@ -146,4 +146,80 @@ describe('od import claude-design CLI', () => {
     expect(result.exitCode).toBe(2);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('saves the imported entry file as a template with --save-template', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'cd-cli-tpl-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, 'home.dc.html');
+    writeFileSync(file, '<html></html>');
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        entryFile: 'home.dc.html',
+        files: ['home.dc.html'],
+        entryKind: 'design-canvas',
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        templateId: 'my-brand',
+        created: 'template',
+        shadowedBundledParent: false,
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const result = await runImport([
+      'claude-design',
+      file,
+      '--project',
+      'proj-7',
+      '--daemon-url',
+      DAEMON,
+      '--save-template',
+      'my-brand',
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    const [templateUrl, templateInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(templateUrl).toBe(`${DAEMON}/api/projects/proj-7/template-from-file`);
+    expect(JSON.parse(String(templateInit.body))).toEqual({
+      file: 'home.dc.html',
+      name: 'my-brand',
+    });
+    expect(stdout.join('')).toContain('template saved: my-brand');
+  });
+
+  it('registers a derived example with --into-template', async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'cd-cli-into-'));
+    tempDirs.push(dir);
+    const file = path.join(dir, 'home.dc.html');
+    writeFileSync(file, '<html></html>');
+    fetchMock
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        entryFile: 'home.dc.html',
+        files: ['home.dc.html'],
+        entryKind: 'design-canvas',
+      }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        templateId: 'parent-tpl',
+        derivedExampleId: 'parent-tpl:example-home',
+        created: 'derived-example',
+        shadowedBundledParent: true,
+      }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const result = await runImport([
+      'claude-design',
+      file,
+      '--project',
+      'proj-8',
+      '--daemon-url',
+      DAEMON,
+      '--into-template',
+      'parent-tpl',
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    const [, templateInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(String(templateInit.body))).toEqual({
+      file: 'home.dc.html',
+      intoTemplateId: 'parent-tpl',
+    });
+    expect(stdout.join('')).toContain('template saved: parent-tpl:example-home');
+  });
 });

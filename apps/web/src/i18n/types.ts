@@ -3867,6 +3867,17 @@ export interface Dict {
   'designFiles.copiedPath': string;
   'designFiles.copyLocalPath': string;
   'designFiles.copiedLocalPath': string;
+  'designFiles.saveAsTemplate': string;
+  'designFiles.templateNameLabel': string;
+  'designFiles.templateNamePlaceholder': string;
+  'designFiles.templateNameRequired': string;
+  'designFiles.intoTemplateLabel': string;
+  'designFiles.intoTemplatePlaceholder': string;
+  'designFiles.saveTemplateAction': string;
+  'designFiles.savingTemplate': string;
+  'designFiles.cancelTemplateAction': string;
+  'designFiles.templateSaved': string;
+  'designFiles.templateSaveFailed': string;
   'designFiles.deleteFolderConfirm': string;
   'designFiles.folderCreated': string;
   'designFiles.folderDeleted': string;

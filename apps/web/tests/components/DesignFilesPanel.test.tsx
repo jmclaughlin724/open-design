@@ -497,6 +497,111 @@ describe("DesignFilesPanel selection", () => {
     }
   });
 
+  it("saves an HTML file as a template from the row menu", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/template-from-file")) {
+        return new Response(
+          JSON.stringify({
+            templateId: "alpha",
+            created: "template",
+            shadowedBundledParent: false,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.includes("/raw/")) {
+        return new Response("<html></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      renderPanel([file({ name: "alpha.html" })]);
+
+      fireEvent.click(screen.getByTestId("design-file-menu-alpha.html"));
+      fireEvent.click(screen.getByTestId("design-file-save-template-alpha.html"));
+
+      const popover = await screen.findByTestId("save-template-popover");
+      const nameInput = popover.querySelector("input") as HTMLInputElement;
+      expect(nameInput.value).toBe("alpha");
+
+      fireEvent.submit(popover.querySelector("form")!);
+
+      await screen.findByTestId("save-template-success");
+      const call = fetchMock.mock.calls.find(([input]) =>
+        String(input).endsWith("/template-from-file"),
+      );
+      expect(call).toBeTruthy();
+      const [url, init] = call!;
+      expect(url).toBe("/api/projects/test-project/template-from-file");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        file: "alpha.html",
+        name: "alpha",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("posts a derived example when an existing template id is given", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/template-from-file")) {
+        return new Response(
+          JSON.stringify({
+            templateId: "parent-tpl",
+            derivedExampleId: "parent-tpl:example-alpha",
+            created: "derived-example",
+            shadowedBundledParent: true,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (url.includes("/raw/")) {
+        return new Response("<html></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      renderPanel([file({ name: "alpha.html" })]);
+
+      fireEvent.click(screen.getByTestId("design-file-menu-alpha.html"));
+      fireEvent.click(screen.getByTestId("design-file-save-template-alpha.html"));
+
+      const popover = await screen.findByTestId("save-template-popover");
+      const inputs = popover.querySelectorAll("input");
+      fireEvent.change(inputs[1]!, { target: { value: "parent-tpl" } });
+      fireEvent.submit(popover.querySelector("form")!);
+
+      await screen.findByTestId("save-template-success");
+      const call = fetchMock.mock.calls.find(([input]) =>
+        String(input).endsWith("/template-from-file"),
+      );
+      expect(call).toBeTruthy();
+      const [, init] = call!;
+      expect(JSON.parse(String(init?.body))).toEqual({
+        file: "alpha.html",
+        intoTemplateId: "parent-tpl",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("hides the save-template action for non-HTML files", () => {
+    renderPanel([file({ name: "alpha.png", kind: "image" })]);
+    fireEvent.click(screen.getByTestId("design-file-menu-alpha.png"));
+    expect(screen.queryByTestId("design-file-save-template-alpha.png")).toBeNull();
+  });
+
   // #5517 contract: the card grid IS the preview surface, so one click on the
   // thumb opens the page in a workspace tab. There is no detail pane and no
   // double-click step.

@@ -924,6 +924,7 @@ import { registerDesignSystemCheckRoutes } from './routes/design-system-check.js
 import { registerDesignSystemResolvedRoutes } from './routes/design-system-resolved.js';
 import { registerDesignSystemNotesRoutes } from './routes/design-system-notes.js';
 import { registerDesignContextRoutes } from './routes/design-context.js';
+import { registerTemplateFromFileRoutes } from './routes/template-from-file.js';
 import { registerRenderProbeRoutes } from './routes/render-probe.js';
 import { createRenderProbeHtmlReader, locateRenderProbeFile } from './services/render-probe.js';
 import { captureHtmlFileScreenshot } from './services/render-probe-screenshot.js';
@@ -9024,6 +9025,15 @@ export async function startServer({
     db,
     http: httpDeps,
     paths: pathDeps,
+    projectStore: projectStoreDeps,
+    projectFiles: projectFileDeps,
+    authorizeProjectRequest,
+  });
+  registerTemplateFromFileRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    templateRoots: DESIGN_TEMPLATE_ROOTS,
     projectStore: projectStoreDeps,
     projectFiles: projectFileDeps,
     authorizeProjectRequest,

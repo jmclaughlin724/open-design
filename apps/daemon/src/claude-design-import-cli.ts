@@ -16,11 +16,14 @@ const USAGE = `Usage:
   od import claude-design <file...|url> --project <id> [--json]
                           [--daemon-url <url>]
                           [--workspace <id> --workspace-member <id>]
+                          [--save-template <name>] [--into-template <parent-id>]
 
 Import a Claude Design ZIP, one or more loose HTML files, or an http(s) URL
 that serves the HTML, into an existing project. ZIP stays a single <file>;
 loose HTML (and sibling assets) may be repeated; a URL must be the only input.
---json prints the daemon response.
+--json prints the daemon response. --save-template wraps the imported entry
+file as a new user design template; --into-template registers it as a derived
+example under an existing template instead.
 
 Wire-up (apps/daemon/src/cli.ts SUBCOMMAND_MAP):
   import: runImport,
@@ -55,6 +58,8 @@ interface ParsedImportOptions {
   daemonUrl?: string;
   workspaceId?: string;
   workspaceMemberId?: string;
+  saveTemplate?: string;
+  intoTemplate?: string;
   json: boolean;
   help: boolean;
 }
@@ -96,6 +101,18 @@ function parseOptions(args: string[]): ParsedImportOptions | { error: string } {
       options.workspaceMemberId = value;
       continue;
     }
+    if (arg === '--save-template') {
+      const value = args[++index];
+      if (!value) return { error: '--save-template requires a value' };
+      options.saveTemplate = value;
+      continue;
+    }
+    if (arg === '--into-template') {
+      const value = args[++index];
+      if (!value) return { error: '--into-template requires a value' };
+      options.intoTemplate = value;
+      continue;
+    }
     if (arg.startsWith('-')) return { error: `unknown option: ${arg}` };
     if (options.command === undefined) {
       options.command = arg;
@@ -113,6 +130,67 @@ function importNameFor(filePath: string, cwd: string): string {
     return path.basename(absolute);
   }
   return relative.split(path.sep).join('/');
+}
+
+interface TemplateSaveOptions {
+  saveTemplate?: string;
+  intoTemplate?: string;
+  workspaceId?: string;
+  workspaceMemberId?: string;
+  json: boolean;
+}
+
+async function saveTemplateIfRequested(
+  options: TemplateSaveOptions,
+  daemonUrl: string,
+  projectId: string,
+  entryFile: string,
+): Promise<ClaudeDesignImportCliResult | null> {
+  if (!options.saveTemplate && !options.intoTemplate) return null;
+  const body: Record<string, unknown> = { file: entryFile };
+  if (options.intoTemplate) {
+    body.intoTemplateId = options.intoTemplate;
+  } else {
+    body.name = options.saveTemplate;
+  }
+  const resp = await fetch(`${daemonUrl}/api/projects/${encodeURIComponent(projectId)}/template-from-file`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(options.workspaceId && options.workspaceMemberId
+        ? {
+            'x-od-workspace-id': options.workspaceId,
+            'x-od-workspace-member-id': options.workspaceMemberId,
+          }
+        : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await resp.json().catch(() => undefined);
+  if (!resp.ok) {
+    const err = (payload as { error?: { message?: string } | string } | undefined)?.error;
+    const message = typeof err === 'string'
+      ? err
+      : err?.message ?? `template save failed: HTTP ${resp.status}`;
+    return fail(message, undefined, resp.status);
+  }
+  if (options.json) {
+    writeJson({ template: payload });
+  } else {
+    const saved = payload as { templateId?: string; derivedExampleId?: string };
+    process.stdout.write(`template saved: ${saved.derivedExampleId ?? saved.templateId ?? 'unknown'}\n`);
+  }
+  return null;
+}
+
+function reportImportSuccess(payload: unknown, json: boolean): void {
+  if (json) {
+    writeJson(payload);
+    return;
+  }
+  const imported = payload as { entryFile: string; files?: string[]; entryKind?: string };
+  const files = Array.isArray(imported.files) ? imported.files.join(', ') : imported.entryFile;
+  process.stdout.write(`imported ${imported.entryFile}${imported.entryKind ? ` (${imported.entryKind})` : ''}: ${files}\n`);
 }
 
 export async function runImport(args: string[]): Promise<ClaudeDesignImportCliResult> {
@@ -177,13 +255,14 @@ export async function runImport(args: string[]): Promise<ClaudeDesignImportCliRe
       if (!payload || typeof payload !== 'object' || typeof (payload as { entryFile?: unknown }).entryFile !== 'string') {
         return fail('daemon returned a malformed claude-design import response', undefined, resp.status);
       }
-      if (options.json) {
-        writeJson(payload);
-      } else {
-        const imported = payload as { entryFile: string; files?: string[]; entryKind?: string };
-        const files = Array.isArray(imported.files) ? imported.files.join(', ') : imported.entryFile;
-        process.stdout.write(`imported ${imported.entryFile}${imported.entryKind ? ` (${imported.entryKind})` : ''}: ${files}\n`);
-      }
+      reportImportSuccess(payload, options.json);
+      const saved = await saveTemplateIfRequested(
+        options,
+        daemonUrl,
+        options.projectId,
+        (payload as { entryFile: string }).entryFile,
+      );
+      if (saved) return saved;
       return { exitCode: 0 };
     }
     const form = new FormData();
@@ -217,13 +296,14 @@ export async function runImport(args: string[]): Promise<ClaudeDesignImportCliRe
     if (!payload || typeof payload !== 'object' || typeof (payload as { entryFile?: unknown }).entryFile !== 'string') {
       return fail('daemon returned a malformed claude-design import response', undefined, resp.status);
     }
-    if (options.json) {
-      writeJson(payload);
-    } else {
-      const imported = payload as { entryFile: string; files?: string[]; entryKind?: string };
-      const files = Array.isArray(imported.files) ? imported.files.join(', ') : imported.entryFile;
-      process.stdout.write(`imported ${imported.entryFile}${imported.entryKind ? ` (${imported.entryKind})` : ''}: ${files}\n`);
-    }
+    reportImportSuccess(payload, options.json);
+    const saved = await saveTemplateIfRequested(
+      options,
+      daemonUrl,
+      options.projectId,
+      (payload as { entryFile: string }).entryFile,
+    );
+    if (saved) return saved;
     return { exitCode: 0 };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

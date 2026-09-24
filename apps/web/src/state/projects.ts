@@ -997,8 +997,7 @@ export async function importClaudeDesignZip(
 export async function importClaudeDesignUrl(
   url: string,
   workspaceContext?: WorkspaceCollabContext | null,
-): Promise<{ project: Project; conversationId: string; entryFile: string }> {
-  const resp = await fetch('/api/import/claude-design', {
+): Promise<{ project: Project; conversationId: string; entryFile: string }> {  const resp = await fetch('/api/import/claude-design', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1020,6 +1019,43 @@ export async function importClaudeDesignUrl(
     project: Project;
     conversationId: string;
     entryFile: string;
+  };
+}
+
+export interface SaveFileAsTemplateInput {
+  file: string;
+  name?: string;
+  intoTemplateId?: string;
+}
+
+export async function saveProjectFileAsTemplate(
+  projectId: string,
+  input: SaveFileAsTemplateInput,
+  workspaceContext?: WorkspaceCollabContext | null,
+): Promise<{ templateId: string; derivedExampleId?: string; created: 'template' | 'derived-example' }> {
+  const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/template-from-file`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(workspaceContext ? workspaceProjectHeaders(workspaceContext) : {}),
+    },
+    body: JSON.stringify(input),
+  });
+  if (!resp.ok) {
+    const payload = await resp.json().catch(() => null);
+    const message =
+      payload != null &&
+      typeof payload === 'object' &&
+      typeof (payload as { error?: { message?: unknown } | null }).error === 'object' &&
+      typeof (payload as { error?: { message?: unknown } }).error?.message === 'string'
+        ? (payload as { error: { message: string } }).error.message
+        : `Save failed (${resp.status})`;
+    throw new Error(message);
+  }
+  return (await resp.json()) as {
+    templateId: string;
+    derivedExampleId?: string;
+    created: 'template' | 'derived-example';
   };
 }
 

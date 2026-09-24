@@ -6,6 +6,7 @@ import { useT } from '../i18n';
 import { LIBRARY_UI_VISIBLE } from '../features/libraryUi';
 import type { Dict } from '../i18n/types';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
+import { saveProjectFileAsTemplate } from '../state/projects';
 import { projectFileUrl, projectRawUrl } from '../providers/registry';
 import {
   appendResourceQuery,
@@ -530,6 +531,12 @@ export function DesignFilesPanel({
   const dragDepthRef = useRef(0);
   const [hover, setHover] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ name: string; top: number; left: number } | null>(null);
+  const [saveTemplateFor, setSaveTemplateFor] = useState<string | null>(null);
+  const [templateNameDraft, setTemplateNameDraft] = useState('');
+  const [intoTemplateDraft, setIntoTemplateDraft] = useState('');
+  const [saveTemplateState, setSaveTemplateState] = useState<
+    { kind: 'idle' } | { kind: 'saving' } | { kind: 'done'; id: string } | { kind: 'error'; message: string }
+  >({ kind: 'idle' });
   const MENU_ESTIMATED_HEIGHT = 180;
   const MENU_SAFE_PADDING = 8;
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -841,6 +848,44 @@ export function DesignFilesPanel({
     const left = Math.max(MENU_SAFE_PADDING, rect.right - 160);
 
     setMenuPos({ name, top, left });
+  }
+
+  function startSaveTemplate(name: string) {
+    setMenuPos(null);
+    setSaveTemplateFor(name);
+    setTemplateNameDraft(name.replace(/\.(dc\.)?html?$/i, '').replaceAll('/', '-'));
+    setIntoTemplateDraft('');
+    setSaveTemplateState({ kind: 'idle' });
+  }
+
+  async function commitSaveTemplate() {
+    if (!saveTemplateFor) return;
+    const name = templateNameDraft.trim();
+    const intoTemplateId = intoTemplateDraft.trim();
+    if (!intoTemplateId && !name) {
+      setSaveTemplateState({ kind: 'error', message: t('designFiles.templateNameRequired') });
+      return;
+    }
+    setSaveTemplateState({ kind: 'saving' });
+    try {
+      const result = await saveProjectFileAsTemplate(
+        projectId,
+        {
+          file: saveTemplateFor,
+          ...(intoTemplateId ? { intoTemplateId } : { name }),
+        },
+        workspaceContext,
+      );
+      setSaveTemplateState({
+        kind: 'done',
+        id: result.derivedExampleId ?? result.templateId,
+      });
+    } catch (error) {
+      setSaveTemplateState({
+        kind: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   async function copyLocalPath(fileName: string) {
@@ -1954,6 +1999,80 @@ export function DesignFilesPanel({
           >
             {t('designFiles.delete')}
           </button>
+          {/\.html?$/i.test(menuPos.name) ? (
+            <button
+              type="button"
+              data-testid={`design-file-save-template-${menuPos.name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                startSaveTemplate(menuPos.name);
+              }}
+            >
+              {t('designFiles.saveAsTemplate')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {saveTemplateFor ? (
+        <div
+          data-testid="save-template-popover"
+          className="df-row-popover"
+          style={{ top: 120, left: 24 }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void commitSaveTemplate();
+            }}
+          >
+            <label>
+              <span>{t('designFiles.templateNameLabel')}</span>
+              <input
+                value={templateNameDraft}
+                onChange={(e) => setTemplateNameDraft(e.target.value)}
+                placeholder={t('designFiles.templateNamePlaceholder')}
+                disabled={saveTemplateState.kind === 'saving'}
+              />
+            </label>
+            <label>
+              <span>{t('designFiles.intoTemplateLabel')}</span>
+              <input
+                value={intoTemplateDraft}
+                onChange={(e) => setIntoTemplateDraft(e.target.value)}
+                placeholder={t('designFiles.intoTemplatePlaceholder')}
+                disabled={saveTemplateState.kind === 'saving'}
+              />
+            </label>
+            <div>
+              <button
+                type="submit"
+                disabled={saveTemplateState.kind === 'saving'}
+              >
+                {saveTemplateState.kind === 'saving'
+                  ? t('designFiles.savingTemplate')
+                  : t('designFiles.saveTemplateAction')}
+              </button>
+              <button
+                type="button"
+                disabled={saveTemplateState.kind === 'saving'}
+                onClick={() => setSaveTemplateFor(null)}
+              >
+                {t('designFiles.cancelTemplateAction')}
+              </button>
+            </div>
+            {saveTemplateState.kind === 'done' ? (
+              <p data-testid="save-template-success">
+                {t('designFiles.templateSaved', { id: saveTemplateState.id })}
+              </p>
+            ) : null}
+            {saveTemplateState.kind === 'error' ? (
+              <p data-testid="save-template-error">
+                {t('designFiles.templateSaveFailed', { message: saveTemplateState.message })}
+              </p>
+            ) : null}
+          </form>
         </div>
       ) : null}
     </div>
