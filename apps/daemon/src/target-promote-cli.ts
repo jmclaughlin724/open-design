@@ -31,7 +31,7 @@ export interface TargetPromoteCliDeps {
 const USAGE = `Usage:
   od target promote --project <id> --yes [--files <ids>] [--dry-run]
                     [--mode pr|branch|copy] [--json]
-                    [--override-drift] [--change <slug>] [--run <id>]
+                    [--override-drift] [--override-design-check] [--change <slug>] [--run <id>]
                     [--daemon-url <url>]
                     [--workspace <id> --workspace-member <id>]
 
@@ -51,6 +51,7 @@ interface ParsedPromoteOptions {
   yes: boolean;
   mode?: 'pr' | 'branch' | 'copy';
   overrideDrift: boolean;
+  overrideDesignCheck: boolean;
   changeSlug?: string;
   runId?: string;
   daemonUrl?: string;
@@ -84,6 +85,7 @@ export function parseTargetPromoteArgs(
     dryRun: false,
     yes: false,
     overrideDrift: false,
+    overrideDesignCheck: false,
     json: false,
     help: false,
   };
@@ -101,6 +103,8 @@ export function parseTargetPromoteArgs(
       options.yes = true;
     } else if (arg === '--override-drift') {
       options.overrideDrift = true;
+    } else if (arg === '--override-design-check') {
+      options.overrideDesignCheck = true;
     } else if (arg === '--project') {
       const value = positionals[++index];
       if (!value) return { error: '--project requires a value' };
@@ -153,6 +157,7 @@ export function promoteRequestBody(options: ParsedPromoteOptions): Record<string
     confirmed: true,
     ...(options.fileIds.length > 0 ? { fileIds: options.fileIds } : {}),
     ...(options.overrideDrift ? { overrideDrift: true } : {}),
+    ...(options.overrideDesignCheck ? { overrideDesignCheck: true } : {}),
     ...(options.changeSlug === undefined ? {} : { changeSlug: options.changeSlug }),
     ...(options.runId === undefined ? {} : { runId: options.runId }),
   };

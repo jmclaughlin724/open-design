@@ -96,6 +96,7 @@ import {
 import type { RouteDeps } from '../../server-context.js';
 import { listSkills } from '../../skills.js';
 import { isSafeId } from '../../projects.js';
+import { emitPromotionStatus, PROMOTION_POLL_INTERVAL_MS } from '../../targets/promotion-loop.js';
 import { sameConnectedTarget } from '../../targets/parse.js';
 import {
   ensureTeamProjectCommentConversations,
@@ -5248,7 +5249,16 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         sse.send('file-changed', evt);
       }, { metadata: watchProject?.metadata });
       sub.ready.then(() => sse.send('ready', { projectId: req.params.id })).catch(() => {});
+      const pushPromotionStatus = () => {
+        void emitPromotionStatus(
+          (event, data) => sse.send(event, data),
+          { db, projectId: req.params.id, cwd: PROJECTS_DIR },
+        ).catch(() => {});
+      };
+      pushPromotionStatus();
+      const promotionTimer = setInterval(pushPromotionStatus, PROMOTION_POLL_INTERVAL_MS);
       const cleanup = () => {
+        clearInterval(promotionTimer);
         if (sub) {
           const { unsubscribe } = sub;
           sub = null;

@@ -44,7 +44,9 @@ export type { PromotionRecord } from './promotion-store.js';
 export {
   PROMOTION_POLL_INTERVAL_MS,
   createPromotionStatusPoller,
+  emitPromotionStatus,
   markShippedFiles,
+  pollPromotionStatus,
   promotionPollDue,
   unchangedShippedSkipList,
 } from './promotion-loop.js';

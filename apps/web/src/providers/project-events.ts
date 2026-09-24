@@ -39,7 +39,8 @@ export type ProjectEvent =
   | ProjectConversationCreatedEvent
   | ProjectLiveArtifactEvent
   | ProjectCollabInvalidationEvent
-  | ProjectContentTransferStateSsePayload;
+  | ProjectContentTransferStateSsePayload
+  | { type: 'promotion_status'; projectId?: string; prState?: string; checks?: string; open?: boolean };
 
 export interface ProjectEventsConnectionOptions {
   /** Test seam: substitute a mock EventSource constructor. */
@@ -196,6 +197,19 @@ export function createProjectEventsConnection(
         }
       });
     }
+    es.addEventListener('promotion_status', (evt) => {
+      try {
+        const data = JSON.parse((evt as MessageEvent).data) as {
+          projectId?: string;
+          prState?: string;
+          checks?: string;
+          open?: boolean;
+        };
+        onChange({ type: 'promotion_status', ...data });
+      } catch {
+        // A malformed status event must not drop the file stream.
+      }
+    });
     es.addEventListener(PROJECT_CONTENT_TRANSFER_STATE_EVENT, (evt) => {
       try {
         // Thin invalidation only. The consumer must re-read exact-scoped

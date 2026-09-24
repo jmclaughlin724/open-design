@@ -399,3 +399,38 @@ function targetKey(target: ConnectedTarget): string {
   }
   return `github:${target.owner}/${target.repo}:${target.defaultBranch ?? ''}`;
 }
+
+const refuseNetworkGh: GhRunner = async () => ({ ok: false, stdout: '', stderr: '' });
+
+/** Poll once. The default runner does not spawn `gh` and never puts a token on argv. */
+export async function pollPromotionStatus(input: {
+  db: PromotionDb;
+  projectId: string;
+  cwd: string;
+  runGh?: GhRunner;
+  paths?: readonly string[];
+}): Promise<PromotionStatusDocument[]> {
+  return createPromotionStatusPoller({
+    db: input.db,
+    projectId: input.projectId,
+    cwd: input.cwd,
+    runGh: input.runGh ?? refuseNetworkGh,
+    ...(input.paths === undefined ? {} : { paths: input.paths }),
+  }).poll();
+}
+
+/** Send each open or shipped status as the `promotion_status` SSE event. */
+export async function emitPromotionStatus(
+  send: (event: string, data: PromotionStatusSsePayload) => void,
+  input: {
+    db: PromotionDb;
+    projectId: string;
+    cwd: string;
+    runGh?: GhRunner;
+    paths?: readonly string[];
+  },
+): Promise<number> {
+  const docs = await pollPromotionStatus(input);
+  for (const doc of docs) send(doc.event, doc.data);
+  return docs.length;
+}

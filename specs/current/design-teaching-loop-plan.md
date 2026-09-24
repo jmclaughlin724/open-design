@@ -744,22 +744,22 @@ clean one; report present in dry-run output.
 - [x] C2 Per-project preview tokens *(merged, wired before static serve)*
 - [x] C3 Resolved design-system manifest cache *(merged, route wired)*
 - [x] D1 Design-system document canvas *(component mounted as a workspace tab; persistence is D2)*
-- [ ] D2 Feedback→usage-notes persistence
+- [x] D2 Feedback→usage-notes persistence *(route, `od design-system note`, and canvas posts wired; shadow test passed)*
 - [x] D3 Composer chips + template starters + start-from-code
 - [x] D4 Workspace-default design system + starred filter + thumbnails
 - [x] E1 Absorb pipeline (raw HTML ingest + normalization) *(merged)*
 - [x] E2 File-kind detection *(merged)*
 - [x] E3 Context extraction *(route, CLI, MCP, and skill wired; prompt digest still open)*
-- [x] E4 Claude Design HTML → design-system source adapter *(pure adapter landed; absorb path does not call it yet)*
+- [x] E4 Claude Design HTML → design-system source adapter *(importer calls the adapter on ZIP and loose HTML)*
 - [x] F1 Connected-target model *(merged, `od target` wired)*
 - [x] F2 Target context acquisition *(local-folder route and `od target context` wired; GitHub fetch still open)*
 - [x] F3 Base snapshot + drift detection *(merged into the existing target registrar)*
-- [x] F4 Change kinds + staged-changes view *(route and list component landed; `od target changes` still open)*
-- [ ] F5 Promotion engine
-- [ ] F6 The gate (write-guard, approval, lock)
-- [x] F7 Security (credentials, secret scan) *(scanner exported; promote does not call it yet)*
-- [x] F8 Post-promote feedback loop *(poller emits promotion_status; parent sends the SSE event)*
-- [ ] F9 Promote-time design-system check
+- [x] F4 Change kinds + staged-changes view *(route, pane, and `od target changes` wired)*
+- [x] F5 Promotion engine *(`od target promote` wired; secret scan, drift block, and design check run before write)*
+- [x] F6 The gate (write-guard, approval, lock) *(write guard is called from `writeProjectFile`; promote requires confirmation and returns 409 while one is in flight)*
+- [x] F7 Security (credentials, secret scan) *(promote calls the scanner; `token` stays rejected; no credential store)*
+- [x] F8 Post-promote feedback loop *(project event stream emits `promotion_status`; default poller does not spawn `gh`)*
+- [x] F9 Promote-time design-system check *(blocks an undeclared target token; dry-run includes the report)*
 
 ## Sequencing
 

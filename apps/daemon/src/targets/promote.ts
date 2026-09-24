@@ -8,6 +8,10 @@ import type { ConnectedTarget } from '@open-design/contracts/api/targets';
 import type { SecretScanFinding } from './secret-scan.js';
 import { scanStagedFiles } from './secret-scan.js';
 import {
+  checkStagedAgainstTargetTokens,
+  type PromoteDesignCheck,
+} from './promote-design-check.js';
+import {
   captureFolderManifest,
   captureGitHead,
   detectTargetDrift,
@@ -15,6 +19,7 @@ import {
   type TargetDriftReport,
 } from './snapshot.js';
 import { summarizeStagedChanges } from './staged-changes.js';
+import { unchangedShippedSkipList } from './promotion-loop.js';
 import {
   driftDecisionFor,
   recordPromotionGate,
@@ -48,6 +53,8 @@ export interface PromoteRequest {
   confirmed: boolean;
   overrideDrift: boolean;
   overrideSecrets: boolean;
+  /** Explicit override for a target-token violation. Missing means block. */
+  overrideDesignCheck?: boolean;
   changeSlug?: string;
   runId: string | null;
   projectUrl?: string;
@@ -60,6 +67,7 @@ export interface PromoteSuccess {
   drift: TargetDriftReport;
   branch: string | null;
   promotion?: PromotionRecord;
+  designCheck?: PromoteDesignCheck;
 }
 
 export interface PromoteFailure {
@@ -69,6 +77,7 @@ export interface PromoteFailure {
   message: string;
   drift?: TargetDriftReport;
   findings?: SecretScanFinding[];
+  designCheck?: PromoteDesignCheck;
 }
 
 export type PromoteResult = PromoteSuccess | PromoteFailure;
@@ -104,6 +113,7 @@ const PROMOTE_KEYS = new Set([
   'confirmed',
   'overrideDrift',
   'overrideSecrets',
+  'overrideDesignCheck',
   'override',
   'changeSlug',
   'runId',
@@ -173,6 +183,9 @@ export function parsePromoteBody(
   if (record.overrideSecrets !== undefined && typeof record.overrideSecrets !== 'boolean') {
     return { ok: false, message: 'overrideSecrets must be a boolean' };
   }
+  if (record.overrideDesignCheck !== undefined && typeof record.overrideDesignCheck !== 'boolean') {
+    return { ok: false, message: 'overrideDesignCheck must be a boolean' };
+  }
   let fileIds: string[] | undefined;
   if (record.fileIds !== undefined) {
     if (!Array.isArray(record.fileIds) || record.fileIds.length > 200) {
@@ -217,6 +230,7 @@ export function parsePromoteBody(
       confirmed: true,
       overrideDrift: record.overrideDrift === true || record.override === true,
       overrideSecrets: record.overrideSecrets === true,
+      overrideDesignCheck: record.overrideDesignCheck === true,
       ...(changeSlug === undefined ? {} : { changeSlug }),
       runId,
       ...(projectUrl === undefined ? {} : { projectUrl }),
@@ -285,7 +299,39 @@ async function runPromotedTarget(input: PromoteInput): Promise<PromoteResult> {
   for (const entry of staged.added) available.set(entry.path, false);
   for (const entry of staged.changed) available.set(entry.path, false);
   for (const entry of staged.removed) available.set(entry.path, true);
-  const selectedIds = request.fileIds ?? [...available.keys()].sort();
+  const shippedSkip = request.fileIds
+    ? new Set<string>()
+    : new Set(unchangedShippedSkipList({
+        history: listPromotions(input.db, input.projectId),
+        target: input.target,
+        changedPaths: [],
+      }));
+  const selectedIds = (request.fileIds ?? [...available.keys()].sort())
+    .filter((fileId) => !shippedSkip.has(fileId));
+  if (selectedIds.length === 0 && shippedSkip.size > 0) {
+    const drift = await readDrift(input.target, input.snapshot);
+    if (!drift.ok) return fail(400, 'BAD_REQUEST', drift.message);
+    recordPromotionGate(input.db, {
+      projectId: input.projectId,
+      actor: input.actor ?? 'local',
+      mode: request.mode,
+      files: [],
+      dryRun: request.dryRun,
+      override: request.overrideDrift || request.overrideSecrets || request.overrideDesignCheck === true,
+      driftDecision: driftDecisionFor(driftHasConflict(drift.report), request.overrideDrift),
+      timestamp: now,
+    });
+    if (driftHasConflict(drift.report) && !request.overrideDrift) {
+      return fail(409, 'CONFLICT', 'target drifted since snapshot', { drift: drift.report });
+    }
+    return {
+      ok: true,
+      dryRun: request.dryRun,
+      files: [],
+      drift: drift.report,
+      branch: null,
+    };
+  }
   if (selectedIds.length === 0) return fail(400, 'BAD_REQUEST', 'no staged files');
   for (const fileId of selectedIds) {
     if (!available.has(fileId)) return fail(400, 'BAD_REQUEST', `unknown staged file: ${fileId}`);
@@ -302,7 +348,7 @@ async function runPromotedTarget(input: PromoteInput): Promise<PromoteResult> {
     mode: request.mode,
     files,
     dryRun: request.dryRun,
-    override: request.overrideDrift || request.overrideSecrets,
+    override: request.overrideDrift || request.overrideSecrets || request.overrideDesignCheck === true,
     driftDecision: driftDecisionFor(driftHasConflict(drift.report), request.overrideDrift),
     timestamp: now,
   });
@@ -314,6 +360,17 @@ async function runPromotedTarget(input: PromoteInput): Promise<PromoteResult> {
   const scan = await scanStagedFiles(projectReal, writes, { override: request.overrideSecrets });
   if (scan.blocked) {
     return fail(409, 'CONFLICT', 'staged files contain secrets', { findings: scan.findings, drift: drift.report });
+  }
+
+  const designCheck = await checkStagedAgainstTargetTokens({
+    projectRoot: projectReal,
+    files: writes,
+  });
+  if (designCheck.applicable && !designCheck.ok && !request.dryRun && request.overrideDesignCheck !== true) {
+    return fail(409, 'CONFLICT', 'staged files violate target design tokens', {
+      drift: drift.report,
+      designCheck,
+    });
   }
 
   if (request.mode === 'pr' && !input.runGh) {
@@ -340,6 +397,7 @@ async function runPromotedTarget(input: PromoteInput): Promise<PromoteResult> {
       files,
       drift: drift.report,
       branch: request.mode === 'copy' ? null : branch,
+      designCheck,
     };
   }
 
@@ -365,7 +423,7 @@ async function runPromotedTarget(input: PromoteInput): Promise<PromoteResult> {
       branch: null,
       backupPath,
     });
-    return { ok: true, dryRun: false, files, drift: drift.report, branch: null, promotion };
+    return { ok: true, dryRun: false, files, drift: drift.report, branch: null, promotion, designCheck };
   }
 
   const applied = await applyGitBranch({
@@ -423,7 +481,7 @@ async function runPromotedTarget(input: PromoteInput): Promise<PromoteResult> {
     branch,
     backupPath: null,
   });
-  return { ok: true, dryRun: false, files, drift: drift.report, branch, promotion };
+  return { ok: true, dryRun: false, files, drift: drift.report, branch, promotion, designCheck };
 }
 
 export function readPromotionHistory(db: PromotionDb, projectId: string): PromotionRecord[] {
@@ -434,7 +492,7 @@ function fail(
   status: 400 | 409,
   code: 'BAD_REQUEST' | 'CONFLICT',
   message: string,
-  extra: { drift?: TargetDriftReport; findings?: SecretScanFinding[] } = {},
+  extra: { drift?: TargetDriftReport; findings?: SecretScanFinding[]; designCheck?: PromoteDesignCheck } = {},
 ): PromoteFailure {
   return { ok: false, status, code, message, ...extra };
 }

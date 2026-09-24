@@ -4,6 +4,7 @@ import type { ConnectedTarget } from '@open-design/contracts/api/targets';
 import type { GhRunner } from '../src/targets/promote.js';
 import {
   createPromotionStatusPoller,
+  emitPromotionStatus,
   markShippedFiles,
   promotionPrViewArgs,
   unchangedShippedSkipList,
@@ -252,5 +253,18 @@ describe('promotion status poller', () => {
       target: otherTarget,
       changedPaths: [],
     })).toEqual(['keep.txt']);
+  });
+
+  it('emits promotion_status for a recorded promotion without calling gh', async () => {
+    const sent: Array<{ event: string; data: PromotionStatusSsePayload }> = [];
+    const count = await emitPromotionStatus(
+      (event, data) => sent.push({ event, data }),
+      { db: historyDb([promotion()]), projectId: 'proj_1', cwd: '/tmp/project' },
+    );
+    expect(count).toBe(1);
+    expect(sent[0]?.event).toBe('promotion_status');
+    expect(sent[0]?.data.files.some((file) => file.path === 'home.dc.html' && file.state === 'shipped')).toBe(true);
+    const event: ChatSseEvent = { event: 'promotion_status', data: sent[0]!.data };
+    expect(event.event).toBe('promotion_status');
   });
 });

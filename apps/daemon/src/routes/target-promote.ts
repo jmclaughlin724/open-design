@@ -45,6 +45,7 @@ import {
   readPromotionHistory,
   type GhRunner,
 } from '../targets/promote.js';
+import { pollPromotionStatus } from '../targets/promotion-loop.js';
 
 export interface RegisterTargetPromoteRoutesDeps {
   db: Parameters<typeof getProject>[0];
@@ -145,6 +146,7 @@ export function registerTargetPromoteRoutes(
       const details: { [key: string]: JsonValue } = {};
       if (result.drift) details.drift = result.drift as unknown as JsonValue;
       if (result.findings) details.findings = result.findings as unknown as JsonValue;
+      if (result.designCheck) details.designCheck = result.designCheck as unknown as JsonValue;
       if (Object.keys(details).length > 0) {
         sendApiError(res, result.status, result.code, result.message, { details });
       } else {
@@ -158,6 +160,7 @@ export function registerTargetPromoteRoutes(
       drift: result.drift,
       branch: result.branch,
       ...(result.promotion ? { promotion: result.promotion } : {}),
+      ...(result.designCheck ? { designCheck: result.designCheck } : {}),
     });
   });
 
@@ -173,5 +176,22 @@ export function registerTargetPromoteRoutes(
       promotions: readPromotionHistory(db, projectId),
       audits: listPromotionAudits(db, projectId),
     });
+  });
+
+  app.get('/api/projects/:id/target/promotion-status', async (req, res) => {
+    const projectId = projectIdOf(req.params?.id);
+    if (!isSafeId(projectId) || !readProject(db, projectId)) {
+      sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+      return;
+    }
+    const allowed = await authorizeProjectRequest(req, res, projectId, { mode: 'read' });
+    if (!allowed) return;
+    const statuses = await pollPromotionStatus({
+      db,
+      projectId,
+      cwd: ctx.paths.PROJECTS_DIR,
+      ...(ctx.runGh ? { runGh: ctx.runGh } : {}),
+    });
+    res.json({ statuses: statuses.map((doc) => doc.data) });
   });
 }
