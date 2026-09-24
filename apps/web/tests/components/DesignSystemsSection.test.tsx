@@ -198,4 +198,12 @@ describe('DesignSystemsSection rename (issue #2811)', () => {
       expect(Number(repeatMatch![1])).toBe(buttonCount);
     }
   });
+
+  it('points the shadcn import at a token-bearing theme item', async () => {
+    render(<DesignSystemsSection cfg={cfg} setCfg={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'shadcn' }));
+    expect(
+      (screen.getByPlaceholderText('https://shadcnstudio.com/r/themes/art-deco.json') as HTMLInputElement).value,
+    ).toBe('https://shadcnstudio.com/r/themes/art-deco.json');
+  });
 });

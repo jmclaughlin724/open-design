@@ -358,6 +358,7 @@ export function DesignSystemsSection({
                     className={importSource === 'shadcn' ? 'active' : ''}
                     onClick={() => {
                       setImportSource('shadcn');
+                      setImportPath((current) => current.trim() || 'https://shadcnstudio.com/r/themes/art-deco.json');
                       clearImportFeedback();
                     }}
                   >
@@ -440,7 +441,7 @@ export function DesignSystemsSection({
                       importSource === 'github'
                         ? 'https://github.com/owner/repo'
                         : importSource === 'shadcn'
-                          ? 'shadcn/ui/theme-zinc'
+                          ? 'https://shadcnstudio.com/r/themes/art-deco.json'
                           : '/path/to/project'
                     }
                     value={importPath}

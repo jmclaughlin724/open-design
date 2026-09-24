@@ -11,6 +11,7 @@ import { runTargetContext } from './target-context-cli.js';
 import { runTargetChanges } from './target-changes-cli.js';
 import { runTargetPromote } from './target-promote-cli.js';
 import { runImport } from './claude-design-import-cli.js';
+import { runShadcn } from './shadcn-cli.js';
 import { runDesignSystemCheck } from './design-system-check-cli.js';
 import { runDesignSystemShow } from './design-system-show-cli.js';
 import { runDesignSystemNote } from './design-system-note-cli.js';
@@ -428,6 +429,7 @@ const SUBCOMMAND_MAP = {
   skill: runSkills,
   skills: runSkills,
   'design-systems': runDesignSystems,
+  shadcn: runShadcn,
   resource: runResource,
   craft: runCraft,
   diagnostics: runDiagnostics,
@@ -10093,8 +10095,10 @@ async function runDesignSystemImportShadcn(args) {
 
 Imports a shadcn registry item as an OpenDesign design system.
 
-  <reference>            "<owner>/<repo>/<item>" (e.g. shadcn/ui/theme-zinc)
-                         or an https URL to a registry-item JSON document.
+  <reference>            "@ss-themes/art-deco", "<owner>/<repo>/<item>",
+                         or an https URL to a token-bearing registry item.
+                         The Studio components.json URL is an init preset
+                         and is rejected because it has no theme tokens.
   --name <name>          Display name override for the imported system.
   --import-mode <mode>   normalized | hybrid | verbatim (default hybrid).
   --craft <slugs>        Comma-separated craft sections to apply (e.g. color,type).`);

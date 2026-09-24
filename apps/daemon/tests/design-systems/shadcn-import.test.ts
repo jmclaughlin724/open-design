@@ -45,6 +45,17 @@ describe('parseShadcnReference', () => {
     });
   });
 
+  it('resolves a Studio namespace to its public registry URL', () => {
+    expect(parseShadcnReference('@ss-themes/art-deco')).toEqual({
+      kind: 'url',
+      url: 'https://shadcnstudio.com/r/themes/art-deco.json',
+    });
+    expect(parseShadcnReference('@shadcn-studio/button-01')).toEqual({
+      kind: 'url',
+      url: 'https://shadcnstudio.com/r/base-nova/button-01.json',
+    });
+  });
+
   it('parses a direct registry-item URL', () => {
     expect(parseShadcnReference('https://example.com/r/theme.json')).toEqual({
       kind: 'url',
@@ -464,5 +475,67 @@ describe('importShadcnDesignSystemProject', () => {
         fetchImpl: streamingFetch,
       }),
     ).rejects.toThrow(/exceeds/i);
+  });
+
+  it('refuses a premium registry response without attaching credentials', async () => {
+    const url = 'https://example.com/r/themes/nova.json';
+    const fetchImpl: ShadcnFetch = async () => ({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      text: async () => 'no',
+    });
+    await expect(
+      importShadcnDesignSystemProject(url, tmpRoot, userDesignSystemsRoot, { fetchImpl }),
+    ).rejects.toThrow(/LICENSE_KEY/);
+  });
+
+  it('rejects a Studio init preset that has no theme tokens', async () => {
+    const url = 'https://example.com/r/components.json';
+    await expect(
+      importShadcnDesignSystemProject(url, tmpRoot, userDesignSystemsRoot, {
+        fetchImpl: fetchStub({
+          [url]: {
+            name: 'components-json',
+            type: 'registry:base',
+            config: { style: 'base-nova', iconLibrary: 'lucide' },
+            dependency: ['lucide-react'],
+          },
+        }),
+      }),
+    ).rejects.toThrow(/init preset/i);
+  });
+
+  it('imports a token-bearing registry:base theme and follows a font dependency', async () => {
+    const themeUrl = 'https://example.com/r/themes/art-deco.json';
+    const fontUrl = 'https://example.com/r/fonts/font-delius.json';
+    const result = await importShadcnDesignSystemProject(themeUrl, tmpRoot, userDesignSystemsRoot, {
+      fetchImpl: fetchStub({
+        [themeUrl]: {
+          name: 'art-deco',
+          type: 'registry:base',
+          config: { style: 'base-vega', iconLibrary: 'hugeicons' },
+          cssVars: { light: { primary: 'oklch(0.77 0.14 91.05)' } },
+          css: { '@layer base': { h1: { 'font-weight': '400' } } },
+          registryDependencies: [fontUrl],
+        },
+        [fontUrl]: {
+          name: 'font-delius',
+          type: 'registry:font',
+          font: {
+            family: 'Delius, sans-serif',
+            provider: 'google',
+            import: 'Delius',
+            variable: '--font-delius',
+          },
+        },
+      }),
+    });
+    const tokens = fs.readFileSync(path.join(result.dir, 'tokens.css'), 'utf8');
+    const source = fs.readFileSync(path.join(result.dir, 'source', 'tokens.source.json'), 'utf8');
+    expect(source).toContain('--primary');
+    expect(source).toContain('--font-delius');
+    expect(tokens).toContain('oklch(0.77 0.14 91.05)');
+    expect(tokens).toContain('Delius, sans-serif');
   });
 });

@@ -35,6 +35,12 @@ import {
   type LocalDesignSystemImportResult,
   importLocalDesignSystemProject,
 } from './import.js';
+import {
+  classifyShadcnRegistryItem,
+  fontVariableCss,
+  resolveStudioNamespace,
+  serializeRegistryCss,
+} from './shadcn-registry.js';
 
 const FETCH_TIMEOUT_MS = 15_000;
 // Whole-import wall-clock ceiling, independent of the per-request timeout.
@@ -103,6 +109,9 @@ type ShadcnRegistryItem = {
   author?: string;
   homepage?: string;
   cssVars?: ShadcnCssVars;
+  css?: Record<string, unknown>;
+  config?: Record<string, unknown>;
+  font?: Record<string, unknown>;
   dependencies?: unknown;
   registryDependencies?: unknown;
   files?: ShadcnRegistryFile[];
@@ -136,6 +145,24 @@ type ResolvedShadcnItem = {
   rawBaseUrl?: string;
 };
 
+export async function viewShadcnRegistryItem(
+  reference: string,
+  fetchImpl: ShadcnFetch = defaultShadcnFetch(),
+): Promise<{ reference: string; url: string; name: string | null; type: string | null; class: string }> {
+  const parsed = parseShadcnReference(reference);
+  if (parsed.kind !== 'url') {
+    throw badReference('view accepts a URL or @namespace/name');
+  }
+  const item = (await fetchJsonDocument(parsed.url, fetchImpl)) as ShadcnRegistryItem;
+  return {
+    reference,
+    url: parsed.url,
+    name: typeof item.name === 'string' ? item.name : null,
+    type: typeof item.type === 'string' ? item.type : null,
+    class: classifyShadcnRegistryItem(item),
+  };
+}
+
 export async function importShadcnDesignSystemProject(
   reference: string,
   tmpRoot: string,
@@ -149,7 +176,13 @@ export async function importShadcnDesignSystemProject(
   const parsed = parseShadcnReference(reference);
   const importedAt = (options.now ?? new Date()).toISOString();
   const resolved = await resolveShadcnItem(parsed, fetchImpl);
-  const item = resolved.item;
+  const item = await expandTokenDependencies(resolved.item, fetchImpl);
+  if (classifyShadcnRegistryItem(item) === 'init-preset') {
+    throw new LocalDesignSystemImportError(
+      'BAD_REQUEST',
+      'shadcn reference is an init preset with no theme tokens. Import a registry:theme or a token-bearing registry:base item, such as a Studio @ss-themes address.',
+    );
+  }
 
   const itemName = typeof item.name === 'string' && item.name.trim() ? item.name.trim() : undefined;
   const hasFiles = Array.isArray(item.files) && item.files.length > 0;
@@ -198,6 +231,11 @@ export function parseShadcnReference(input: string): ParsedShadcnReference {
     throw new LocalDesignSystemImportError('BAD_REQUEST', 'a shadcn registry reference is required');
   }
 
+  const studioUrl = resolveStudioNamespace(trimmed);
+  if (studioUrl) {
+    return { kind: 'url', url: studioUrl };
+  }
+
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
     let url: URL;
     try {
@@ -227,7 +265,7 @@ export function parseShadcnReference(input: string): ParsedShadcnReference {
   const segments = pathPart.split('/').filter(Boolean);
   if (segments.length !== 3) {
     throw badReference(
-      'reference must be "<owner>/<repo>/<item>" or an https URL to a registry item',
+      'reference must be "<owner>/<repo>/<item>", "@namespace/name", or an https URL to a registry item',
     );
   }
   const [owner, repo, item] = segments as [string, string, string];
@@ -509,6 +547,12 @@ async function fetchText(url: string, fetchImpl: ShadcnFetch): Promise<string> {
       throw new LocalDesignSystemImportError('BAD_REQUEST', `could not fetch ${url}: ${formatError(err)}`);
     }
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new LocalDesignSystemImportError(
+          'BAD_REQUEST',
+          `premium registry item at ${url} requires credentials. This importer will not attach EMAIL or LICENSE_KEY.`,
+        );
+      }
       throw new LocalDesignSystemImportError(
         'BAD_REQUEST',
         `could not fetch ${url}: HTTP ${response.status} ${response.statusText}`.trimEnd(),
@@ -592,13 +636,63 @@ async function readBoundedStream(
 // Materialization (temp project the local importer can scan)
 // ---------------------------------------------------------------------------
 
+async function expandTokenDependencies(
+  item: ShadcnRegistryItem,
+  fetchImpl: ShadcnFetch,
+  depth = 0,
+): Promise<ShadcnRegistryItem> {
+  if (depth > 2) return item;
+  const deps = Array.isArray(item.registryDependencies) ? item.registryDependencies : [];
+  const merged: ShadcnRegistryItem = {
+    ...item,
+    cssVars: {
+      theme: { ...item.cssVars?.theme },
+      light: { ...item.cssVars?.light },
+      dark: { ...item.cssVars?.dark },
+    },
+    css: { ...item.css },
+  };
+  for (const dep of deps) {
+    if (typeof dep !== 'string' || !/^https?:\/\//i.test(dep)) continue;
+    let parsed: ShadcnRegistryItem;
+    try {
+      parsed = (await fetchJsonDocument(dep, fetchImpl)) as ShadcnRegistryItem;
+    } catch (err) {
+      if (err instanceof LocalDesignSystemImportError) throw err;
+      continue;
+    }
+    const expanded = await expandTokenDependencies(parsed, fetchImpl, depth + 1);
+    merged.cssVars = {
+      theme: { ...expanded.cssVars?.theme, ...merged.cssVars?.theme },
+      light: { ...expanded.cssVars?.light, ...merged.cssVars?.light },
+      dark: { ...expanded.cssVars?.dark, ...merged.cssVars?.dark },
+    };
+    merged.css = { ...expanded.css, ...merged.css };
+    if (!merged.font && expanded.font) merged.font = expanded.font;
+  }
+  return merged;
+}
+
 async function materializeShadcnItem(
   item: ShadcnRegistryItem,
   tempDir: string,
   resolved: ResolvedShadcnItem,
   fetchImpl: ShadcnFetch,
 ): Promise<void> {
-  await writeFile(path.join(tempDir, 'theme.css'), renderShadcnSourceCss(item.cssVars), 'utf8');
+  const themeParts = [renderShadcnSourceCss(item.cssVars)];
+  if (item.css && Object.keys(item.css).length > 0) {
+    themeParts.push(serializeRegistryCss(item.css));
+  }
+  const fontCss = fontVariableCss(item.font);
+  if (fontCss) themeParts.push(fontCss);
+  await writeFile(path.join(tempDir, 'theme.css'), `${themeParts.filter(Boolean).join('\n')}\n`, 'utf8');
+  if (item.config) {
+    await writeFile(
+      path.join(tempDir, 'shadcn-config.json'),
+      `${JSON.stringify(item.config, null, 2)}\n`,
+      'utf8',
+    );
+  }
 
   const description =
     typeof item.description === 'string' && item.description.trim()

@@ -50,7 +50,7 @@ import {
   importLocalDesignSystemProject,
 } from '../design-systems/import.js';
 import { importGitHubDesignSystemProject } from '../design-systems/github-import.js';
-import { importShadcnDesignSystemProject } from '../design-systems/shadcn-import.js';
+import { importShadcnDesignSystemProject, viewShadcnRegistryItem } from '../design-systems/shadcn-import.js';
 import { renderDesignSystemPreview } from '../design-systems/preview.js';
 import { renderDesignSystemShowcase } from '../design-systems/showcase.js';
 import { listPromptTemplates, readPromptTemplate } from '../media/prompt-templates.js';
@@ -1433,6 +1433,22 @@ export function registerStaticResourceRoutes(app: Express, ctx: RegisterStaticRe
       if (sendWorkspaceScopeError(res, err)) return;
       if (err instanceof LocalDesignSystemImportError) {
         return sendApiError(res, err.code === 'BAD_REQUEST' ? 400 : 500, err.code, err.message);
+      }
+      sendApiError(res, 500, 'INTERNAL_ERROR', String(err));
+    }
+  });
+
+  app.post('/api/shadcn/view', async (req, res) => {
+    if (!requireLocalOrigin(req, res)) return;
+    try {
+      const reference = typeof req.body?.reference === 'string' ? req.body.reference : '';
+      if (!reference.trim()) {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'a shadcn registry reference is required');
+      }
+      res.json(await viewShadcnRegistryItem(reference));
+    } catch (err: any) {
+      if (err instanceof LocalDesignSystemImportError) {
+        return sendApiError(res, 400, 'BAD_REQUEST', err.message);
       }
       sendApiError(res, 500, 'INTERNAL_ERROR', String(err));
     }
