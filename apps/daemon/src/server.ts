@@ -842,8 +842,10 @@ import { createPreviewTokenServeMiddleware, registerPreviewTokenRoutes } from '.
 import { registerTargetRoutes } from './routes/targets.js';
 import { registerTargetContextRoutes } from './routes/target-context.js';
 import { registerStagedChangesRoutes } from './routes/staged-changes.js';
+import { registerTargetPromoteRoutes } from './routes/target-promote.js';
 import { registerDesignSystemCheckRoutes } from './routes/design-system-check.js';
 import { registerDesignSystemResolvedRoutes } from './routes/design-system-resolved.js';
+import { registerDesignSystemNotesRoutes } from './routes/design-system-notes.js';
 import { registerDesignContextRoutes } from './routes/design-context.js';
 import { registerRenderProbeRoutes } from './routes/render-probe.js';
 import { createRenderProbeHtmlReader } from './services/render-probe.js';
@@ -8490,6 +8492,13 @@ export async function startServer({
     projectStore: projectStoreDeps,
     authorizeProjectRequest,
   });
+  registerTargetPromoteRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    authorizeProjectRequest,
+  });
   registerDesignSystemCheckRoutes(app, {
     db,
     http: httpDeps,
@@ -8502,6 +8511,9 @@ export async function startServer({
     paths: pathDeps,
     projectStore: projectStoreDeps,
     authorizeProjectRequest,
+  });
+  registerDesignSystemNotesRoutes(app, {
+    paths: pathDeps,
   });
   registerDesignContextRoutes(app, {
     db,

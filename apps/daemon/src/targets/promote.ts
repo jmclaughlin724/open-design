@@ -305,7 +305,7 @@ export async function promoteTarget(input: PromoteInput): Promise<PromoteResult>
     files,
     removed,
     branch,
-    baseBranch: input.target.defaultBranch,
+    ...(input.target.defaultBranch === undefined ? {} : { baseBranch: input.target.defaultBranch }),
     message: commitMessage(projectSlug, request.runId),
   });
   if (!applied.ok) return fail(400, 'BAD_REQUEST', applied.message);
@@ -322,7 +322,7 @@ export async function promoteTarget(input: PromoteInput): Promise<PromoteResult>
       head: branch,
       base: applied.base,
       projectSlug,
-      projectUrl: request.projectUrl,
+      ...(request.projectUrl === undefined ? {} : { projectUrl: request.projectUrl }),
       runId: request.runId,
     });
     if (args.some((arg) => TOKEN_RE.test(arg))) {

@@ -9,9 +9,11 @@ import { runResource } from './resource-cli.js';
 import { runTarget } from './target-cli.js';
 import { runTargetContext } from './target-context-cli.js';
 import { runTargetChanges } from './target-changes-cli.js';
+import { runTargetPromote } from './target-promote-cli.js';
 import { runImport } from './claude-design-import-cli.js';
 import { runDesignSystemCheck } from './design-system-check-cli.js';
 import { runDesignSystemShow } from './design-system-show-cli.js';
+import { runDesignSystemNote } from './design-system-note-cli.js';
 import { runProbe } from './render-probe-cli.js';
 import { runContext } from './design-context-cli.js';
 import { runProjectHandoff } from './handoff-cli.js';
@@ -444,6 +446,11 @@ const SUBCOMMAND_MAP = {
 };
 
 async function runTargetCommand(args) {
+  if (args[0] === 'promote') {
+    const { exitCode } = await runTargetPromote(args.slice(1));
+    if (exitCode !== 0) process.exitCode = exitCode;
+    return;
+  }
   if (args[0] === 'context') {
     const { exitCode } = await runTargetContext(args.slice(1));
     if (exitCode !== 0) process.exitCode = exitCode;
@@ -461,6 +468,11 @@ async function runTargetCommand(args) {
 async function runDesignSystemCommand(args) {
   if (args[0] === 'show') {
     const { exitCode } = await runDesignSystemShow(args);
+    if (exitCode !== 0) process.exitCode = exitCode;
+    return;
+  }
+  if (args[0] === 'note') {
+    const { exitCode } = await runDesignSystemNote(args);
     if (exitCode !== 0) process.exitCode = exitCode;
     return;
   }

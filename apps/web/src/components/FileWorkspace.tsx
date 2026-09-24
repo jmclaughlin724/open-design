@@ -55,6 +55,10 @@ import {
   DesignSystemDocumentCanvasPane,
 } from './DesignSystemDocumentCanvas';
 import { StagedChangesPane } from './StagedChangesPane';
+import {
+  postDesignSystemSectionNote,
+  postDesignSystemTokenUsage,
+} from './design-system-notes-client';
 import { setPendingDesignSystemCreateEntry } from '../analytics/ds-create-entry';
 import { navigate, registerNavigationGuard } from '../router';
 import { downloadDesignSystemArchive, downloadProjectArchive } from '../runtime/exports';
@@ -4293,7 +4297,18 @@ export function FileWorkspace({
             onNewSketch={noop}
           />
         ) : activeTab === DESIGN_SYSTEM_CANVAS_TAB_ID ? (
-          <DesignSystemDocumentCanvasPane projectId={projectId} />
+          <DesignSystemDocumentCanvasPane
+            projectId={projectId}
+            onAddUsageNotes={(draft) => {
+              void postDesignSystemSectionNote(draft.designSystemId, draft.sectionId, draft.text);
+            }}
+            onAddTokenUsage={(draft) => {
+              void postDesignSystemTokenUsage(draft.designSystemId, draft.tokenName, draft.text);
+            }}
+            onSectionFeedback={(feedback) => {
+              void postDesignSystemSectionNote(feedback.designSystemId, feedback.sectionId, feedback.text);
+            }}
+          />
         ) : activeTab === '__target-changes__' ? (
           <StagedChangesPane projectId={projectId} />
         ) : activeTab === DESIGN_SYSTEM_TAB && designSystemProject ? (
