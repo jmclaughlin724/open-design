@@ -3,7 +3,7 @@ name: render-probe
 description: |
   Verify a generated HTML file contains the heading or control you just wrote.
   Use after generating or editing a page, before finishing, to probe one
-  selector. HTML parse only — it does not run a browser or capture a screenshot.
+  selector or capture a screenshot.
 triggers:
   - "render probe"
   - "probe the page"
@@ -27,16 +27,15 @@ write succeeded.
 Prefer the MCP tool `renderProbe`.
 
 - `file`: project-relative HTML path, such as `index.html`.
-- `expression`: a selector expression, not JavaScript.
-- `screenshot`: accepted and ignored. This probe cannot capture a PNG. Do not
-  ask for one, and do not add a browser driver.
+- `expression`: a selector expression, not JavaScript. Required unless `screenshot` is true.
+- `screenshot`: when true, capture a headless Chromium PNG of the file and return its path under the project artifacts directory. Selector evaluation still does not run scripts.
 
 Omit `project` to use the project the user has open.
 
 On a runtime without that tool:
 
 ```
-od probe <project> --file <path> --eval <expression> --json
+od probe <project> --file <path> --eval <expression> --screenshot --json
 ```
 
 ## Expressions
@@ -50,7 +49,7 @@ od probe <project> --file <path> --eval <expression> --json
 ## How to read the result
 
 The probe reads project file bytes and evaluates the selector. It does not run
-scripts, apply the preview bridge, or compute layout. A false or unmatched
-result is still a successful evaluation — inspect `matched` and `value`. Fix
-the file and probe again. Stop only when the heading matches and the
-interaction selector exists.
+scripts, apply the preview bridge, or compute layout. When `screenshot` is
+true, the PNG path is `screenshot`. A false or unmatched result is still a
+successful evaluation — inspect `matched` and `value`. Fix the file and probe
+again. Stop only when the heading matches and the interaction selector exists.

@@ -12,7 +12,7 @@ describe('design teaching-loop MCP tools', () => {
     ]));
 
     expect(TOOL_DEFS.find((tool) => tool.name === 'renderProbe')?.inputSchema).toMatchObject({
-      required: ['file', 'expression'],
+      required: ['file'],
     });
     expect(TOOL_DEFS.find((tool) => tool.name === 'getDesignContext')?.inputSchema).toMatchObject({
       required: ['file'],

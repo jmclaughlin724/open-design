@@ -76,13 +76,14 @@ import {
 import { resolveProjectRoot } from './project-root.js';
 import { readProjectFile } from './projects.js';
 import {
-  RENDER_PROBE_LIMITATION,
   RENDER_PROBE_MCP_TOOL,
   RenderProbeError,
   buildRenderProbeResponse,
   evaluateRenderProbe,
+  locateRenderProbeFile,
   readRenderProbeHtml,
 } from './services/render-probe.js';
+import { captureHtmlFileScreenshot, captureProjectRenderProbeScreenshot } from './services/render-probe-screenshot.js';
 
 const SERVER_NAME = 'open-design';
 const SERVER_VERSION = '0.2.0';
@@ -2374,19 +2375,37 @@ async function handleMcpToolCall(
           throw new RenderProbeError('BAD_REQUEST', 'file is required');
         }
         const probed = parseRenderProbeArgs(args);
-        const html = await readRenderProbeHtml({
-          projectsRoot: loaded.projectsRoot,
-          projectId: loaded.id,
-          file,
-          ...(loaded.metadata === undefined ? {} : { metadata: loaded.metadata }),
-        });
-        const evaluation = evaluateRenderProbe(html, probed.expression);
+        const evaluation = probed.expression.trim().length > 0
+          ? evaluateRenderProbe(await readRenderProbeHtml({
+            projectsRoot: loaded.projectsRoot,
+            projectId: loaded.id,
+            file,
+            ...(loaded.metadata === undefined ? {} : { metadata: loaded.metadata }),
+          }), probed.expression)
+          : { value: null, matched: false, matchCount: 0 };
+        const screenshotPath = probed.screenshotRequested
+          ? await captureProjectRenderProbeScreenshot({
+            artifactsRoot: path.join(
+              resolveDataDir(process.env.OD_DATA_DIR, resolveProjectRoot(path.dirname(fileURLToPath(import.meta.url)))),
+              'artifacts',
+            ),
+            projectId: loaded.id,
+            htmlPath: await locateRenderProbeFile({
+              projectsRoot: loaded.projectsRoot,
+              projectId: loaded.id,
+              file,
+              ...(loaded.metadata === undefined ? {} : { metadata: loaded.metadata }),
+            }),
+            capture: captureHtmlFileScreenshot,
+          })
+          : null;
         return ok(withActiveEcho(
           buildRenderProbeResponse({
             file,
             expression: probed.expression.trim(),
             evaluation,
             screenshotRequested: probed.screenshotRequested,
+            screenshotPath,
           }) as unknown as JsonObject,
           loaded.active,
           loaded.resolved,
@@ -2541,13 +2560,7 @@ function parseRenderProbeArgs(args: McpArgs): { expression: string; screenshotRe
       ? args.eval
       : '';
   const screenshotRequested = args.screenshot === true;
-  if (expression.trim().length === 0) {
-    if (screenshotRequested) {
-      throw new RenderProbeError(
-        'BAD_REQUEST',
-        `screenshot is unavailable. ${RENDER_PROBE_LIMITATION}`,
-      );
-    }
+  if (expression.trim().length === 0 && !screenshotRequested) {
     throw new RenderProbeError('BAD_REQUEST', 'expression is required');
   }
   return { expression, screenshotRequested };

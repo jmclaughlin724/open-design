@@ -850,7 +850,8 @@ import { registerDesignSystemResolvedRoutes } from './routes/design-system-resol
 import { registerDesignSystemNotesRoutes } from './routes/design-system-notes.js';
 import { registerDesignContextRoutes } from './routes/design-context.js';
 import { registerRenderProbeRoutes } from './routes/render-probe.js';
-import { createRenderProbeHtmlReader } from './services/render-probe.js';
+import { createRenderProbeHtmlReader, locateRenderProbeFile } from './services/render-probe.js';
+import { captureHtmlFileScreenshot } from './services/render-probe-screenshot.js';
 import { registerDeployRoutes, registerDeploymentCheckRoutes } from './routes/deploy.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes, createEnforceWorkspaceProjectMutation } from './routes/project/index.js';
@@ -8542,6 +8543,17 @@ export async function startServer({
     http: httpDeps,
     projectExists: renderProbeFiles.projectExists,
     readHtml: renderProbeFiles.readHtml,
+    artifactsRoot: ARTIFACTS_DIR,
+    captureScreenshot: captureHtmlFileScreenshot,
+    locateFile: (projectId, file) => {
+      const project = getProject(db, projectId);
+      return locateRenderProbeFile({
+        projectsRoot: PROJECTS_DIR,
+        projectId,
+        file,
+        ...(project?.metadata === undefined ? {} : { metadata: project.metadata }),
+      });
+    },
   });
 
   // Whether the caller may mutate (edit / publish-toggle / delete) a design

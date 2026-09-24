@@ -5,7 +5,8 @@
 // so this probe reads the project file through the same safe path the
 // preview file serve uses and evaluates a selector expression against those
 // bytes. It does not run scripts, apply the preview bridge, compute layout,
-// or capture screenshots.
+// or capture screenshots. Screenshot capture lives in
+// render-probe-screenshot.ts and is a headless Chromium PNG of the same file.
 
 import { load } from 'cheerio';
 import { readFile } from 'node:fs/promises';
@@ -20,16 +21,16 @@ export const RENDER_PROBE_MAX_HTML_BYTES = 2 * 1024 * 1024;
 export const RENDER_PROBE_MAX_EXPRESSION_LENGTH = 512;
 
 export const RENDER_PROBE_LIMITATION =
-  'HTML parse only. The probe reads project file bytes through the same safe path the preview file serve uses, then evaluates a selector with cheerio. It does not run scripts, apply the preview bridge, compute layout, or capture screenshots — the e2e Playwright driver cannot be imported from the daemon without crossing the app boundary.';
+  'Selector evaluation is HTML parse only. The probe reads project file bytes through the same safe path the preview file serve uses, then evaluates a selector with cheerio. It does not run scripts, apply the preview bridge, or compute layout. A screenshot request captures that same file in headless Chromium and returns a PNG path under the project artifacts directory.';
 
 export const RENDER_PROBE_MCP_TOOL = {
   name: 'renderProbe',
   description:
-    'Evaluate a selector expression against a project HTML file and return the matched text or a heading assertion. Does not run a browser. Screenshots are unavailable.',
+    'Evaluate a selector expression against a project HTML file, or capture a headless Chromium PNG of that file. Selector evaluation does not run scripts. Set screenshot to true to write a PNG under the project artifacts directory.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
-    required: ['file', 'expression'],
+    required: ['file'],
     properties: {
       file: {
         type: 'string',
@@ -42,7 +43,7 @@ export const RENDER_PROBE_MCP_TOOL = {
       },
       screenshot: {
         type: 'boolean',
-        description: 'Accepted and ignored. This probe cannot capture a PNG.',
+        description: 'When true, capture a PNG of the HTML file and return its path.',
       },
     },
   },
@@ -64,7 +65,7 @@ export interface RenderProbeResponse {
   matched: boolean;
   matchCount: number;
   engine: typeof RENDER_PROBE_ENGINE;
-  screenshot: null;
+  screenshot: string | null;
   screenshotRequested: boolean;
   limitation: string;
 }
@@ -148,6 +149,7 @@ export function buildRenderProbeResponse(input: {
   expression: string;
   evaluation: RenderProbeEvaluation;
   screenshotRequested: boolean;
+  screenshotPath: string | null;
 }): RenderProbeResponse {
   return {
     ok: true,
@@ -157,7 +159,7 @@ export function buildRenderProbeResponse(input: {
     matched: input.evaluation.matched,
     matchCount: input.evaluation.matchCount,
     engine: RENDER_PROBE_ENGINE,
-    screenshot: null,
+    screenshot: input.screenshotPath,
     screenshotRequested: input.screenshotRequested,
     limitation: RENDER_PROBE_LIMITATION,
   };
@@ -200,7 +202,7 @@ export function createRenderProbeHtmlReader(options: {
   };
 }
 
-export async function readRenderProbeHtml(input: {
+export async function locateRenderProbeFile(input: {
   projectsRoot: string;
   projectId: string;
   file: string;
@@ -230,6 +232,16 @@ export async function readRenderProbeHtml(input: {
   if (ext !== '.html' && ext !== '.htm') {
     throw new RenderProbeError('VALIDATION_FAILED', 'render probe only reads HTML files');
   }
+  return filePath;
+}
+
+export async function readRenderProbeHtml(input: {
+  projectsRoot: string;
+  projectId: string;
+  file: string;
+  metadata?: unknown;
+}): Promise<string> {
+  const filePath = await locateRenderProbeFile(input);
   try {
     return await readFile(filePath, 'utf8');
   } catch (error) {

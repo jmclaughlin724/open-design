@@ -738,7 +738,7 @@ clean one; report present in dry-run output.
 - [x] A1 Token usage/derivation/relations *(done — local)*
 - [x] A2 DESIGN.md section schema *(done — local)*
 - [x] B1 check_design_system tool *(route, CLI, MCP, and skill wired; screenshot-free)*
-- [x] B2 render_probe tool *(HTML-parse route, CLI, MCP, and skill wired; screenshot capture is not implemented)*
+- [x] B2 render_probe tool *(HTML-parse eval, headless Chromium PNG, route, CLI, MCP, skill, and live daemon smoke wired)*
 - [x] B3 SSE roll-ups + todo events *(merged, wired into emitAgentEvent)*
 - [x] C1 Anchor-stable comments *(merged)*
 - [x] C2 Per-project preview tokens *(merged, wired before static serve)*

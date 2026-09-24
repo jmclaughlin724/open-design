@@ -17,6 +17,7 @@ import {
   evaluateRenderProbe,
   readRenderProbeHtml,
 } from '../src/services/render-probe.js';
+import { captureHtmlFileScreenshot } from '../src/services/render-probe-screenshot.js';
 
 const fixturePath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures/render-probe.html');
 
@@ -111,6 +112,12 @@ describe('render probe', () => {
         if (file !== 'index.html') throw new RenderProbeError('FILE_NOT_FOUND', 'file not found');
         return html;
       },
+      artifactsRoot: projectsRoot,
+      locateFile: async () => fixturePath,
+      captureScreenshot: async (_htmlPath, outputPath) => {
+        await mkdir(path.dirname(outputPath), { recursive: true });
+        await writeFile(outputPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+      },
     });
     const server = await listen(app);
     servers.push(server);
@@ -122,15 +129,17 @@ describe('render probe', () => {
       screenshot: true,
     });
     expect(response.status).toBe(200);
-    expect(JSON.parse(response.body)).toMatchObject({
+    const body = JSON.parse(response.body) as { screenshot: string };
+    expect(body).toMatchObject({
       ok: true,
       file: 'index.html',
       value: 'Probe ready',
       matched: true,
       engine: RENDER_PROBE_ENGINE,
-      screenshot: null,
       screenshotRequested: true,
     });
+    expect(body.screenshot.endsWith('.png')).toBe(true);
+    expect(await readFile(body.screenshot)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
 
     const assertion = await request(port, 'POST', '/api/projects/proj-1/render-probe', {
       file: 'index.html',
@@ -143,8 +152,8 @@ describe('render probe', () => {
       file: 'index.html',
       screenshot: true,
     });
-    expect(screenshotOnly.status).toBe(400);
-    expect(screenshotOnly.body).toContain('screenshot is unavailable');
+    expect(screenshotOnly.status).toBe(200);
+    expect(JSON.parse(screenshotOnly.body).screenshot).toMatch(/\.png$/);
 
     const denied = await request(port, 'POST', '/api/projects/%2e%2e/render-probe', {
       file: 'index.html',
@@ -186,8 +195,16 @@ describe('render probe', () => {
 
   it('exports the MCP tool name the listing should register', () => {
     expect(RENDER_PROBE_MCP_TOOL.name).toBe('renderProbe');
-    expect(RENDER_PROBE_MCP_TOOL.inputSchema.required).toEqual(['file', 'expression']);
+    expect(RENDER_PROBE_MCP_TOOL.inputSchema.required).toEqual(['file']);
   });
+
+  it('captures a PNG of the fixture in headless Chromium', async () => {
+    const outputPath = path.join(projectsRoot, 'fixture.png');
+    await captureHtmlFileScreenshot(fixturePath, outputPath);
+    const bytes = await readFile(outputPath);
+    expect(bytes.subarray(0, 8)).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    expect(bytes.length).toBeGreaterThan(8);
+  }, 60_000);
 });
 
 describe('od probe CLI', () => {
@@ -250,10 +267,25 @@ describe('od probe CLI', () => {
     expect(JSON.parse(stdout.join('')).value).toBe('Probe ready');
   });
 
-  it('rejects a screenshot-only invocation before calling the daemon', async () => {
-    const result = await runProbe(['proj-1', '--file', 'index.html', '--screenshot']);
-    expect(result.exitCode).toBe(2);
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(stderr.join('')).toContain('screenshot is unavailable');
+  it('posts a screenshot request and prints the PNG path', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      ok: true,
+      file: 'index.html',
+      expression: '',
+      value: null,
+      matched: false,
+      matchCount: 0,
+      engine: 'html-parse',
+      screenshot: '/tmp/proj-1/render-probe/shot.png',
+      screenshotRequested: true,
+      limitation: 'HTML parse only',
+    }), { status: 200 }));
+    const result = await runProbe(['proj-1', '--file', 'index.html', '--screenshot', '--daemon-url', 'http://127.0.0.1:9999']);
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body))).toEqual({
+      file: 'index.html',
+      screenshot: true,
+    });
+    expect(stdout.join('')).toContain('/tmp/proj-1/render-probe/shot.png');
   });
 });

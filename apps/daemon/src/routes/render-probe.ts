@@ -24,11 +24,11 @@ import type { AuthorizeProjectRequest } from '../collab/project-request-authorit
 import type { sendApiError as sendApiErrorImpl } from '../http/api-errors.js';
 import { sendApiError } from '../http/api-errors.js';
 import {
-  RENDER_PROBE_LIMITATION,
   RenderProbeError,
   buildRenderProbeResponse,
   evaluateRenderProbe,
 } from '../services/render-probe.js';
+import { captureProjectRenderProbeScreenshot } from '../services/render-probe-screenshot.js';
 
 export { RENDER_PROBE_MCP_TOOL } from '../services/render-probe.js';
 
@@ -38,6 +38,9 @@ export interface RegisterRenderProbeRoutesDeps {
   /** When omitted, a safe project id is accepted and readHtml decides. */
   projectExists?: (projectId: string) => boolean;
   readHtml: (projectId: string, file: string) => Promise<string>;
+  locateFile?: (projectId: string, file: string) => Promise<string>;
+  artifactsRoot?: string;
+  captureScreenshot?: (htmlPath: string, outputPath: string) => Promise<void>;
 }
 
 interface ProbeBody {
@@ -63,13 +66,21 @@ export function registerRenderProbeRoutes(app: Express, deps: RegisterRenderProb
 
     try {
       const body = parseProbeBody(req.body);
-      const html = await deps.readHtml(projectId, body.file);
-      const evaluation = evaluateRenderProbe(html, body.expression);
+      const html = body.expression.trim().length > 0
+        ? await deps.readHtml(projectId, body.file)
+        : '';
+      const evaluation = body.expression.trim().length > 0
+        ? evaluateRenderProbe(html, body.expression)
+        : { value: null, matched: false, matchCount: 0 };
+      const screenshotPath = body.screenshotRequested
+        ? await captureRequestedScreenshot(deps, projectId, body.file)
+        : null;
       res.json(buildRenderProbeResponse({
         file: body.file,
         expression: body.expression.trim(),
         evaluation,
         screenshotRequested: body.screenshotRequested,
+        screenshotPath,
       }));
     } catch (error) {
       if (res.headersSent) return;
@@ -83,6 +94,28 @@ export function registerRenderProbeRoutes(app: Express, deps: RegisterRenderProb
       );
     }
   });
+}
+
+async function captureRequestedScreenshot(
+  deps: RegisterRenderProbeRoutesDeps,
+  projectId: string,
+  file: string,
+): Promise<string> {
+  if (!deps.locateFile || !deps.artifactsRoot || !deps.captureScreenshot) {
+    throw new RenderProbeError('INTERNAL_ERROR', 'screenshot capture is not configured');
+  }
+  const htmlPath = await deps.locateFile(projectId, file);
+  try {
+    return await captureProjectRenderProbeScreenshot({
+      artifactsRoot: deps.artifactsRoot,
+      projectId,
+      htmlPath,
+      capture: deps.captureScreenshot,
+    });
+  } catch (error) {
+    if (error instanceof RenderProbeError) throw error;
+    throw new RenderProbeError('INTERNAL_ERROR', 'screenshot capture failed');
+  }
 }
 
 function parseProbeBody(body: unknown): ProbeBody {
@@ -102,15 +135,7 @@ function parseProbeBody(body: unknown): ProbeBody {
       ? record.eval
       : '';
   const screenshotRequested = record.screenshot === true;
-  if (expression.trim().length === 0) {
-    if (screenshotRequested) {
-      throw new RenderProbeError(
-        'BAD_REQUEST',
-        `screenshot is unavailable. ${RENDER_PROBE_LIMITATION}`,
-        400,
-        { reason: 'screenshot_unavailable' },
-      );
-    }
+  if (expression.trim().length === 0 && !screenshotRequested) {
     throw new RenderProbeError('BAD_REQUEST', 'expression is required');
   }
   return { file: record.file, expression, screenshotRequested };

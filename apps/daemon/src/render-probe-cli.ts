@@ -12,12 +12,13 @@ export interface ProbeCliResult {
 }
 
 const USAGE = `Usage:
-  od probe <project> --file <path> --eval <expression> [--json]
+  od probe <project> --file <path> --eval <expression> [--screenshot] [--json]
+  od probe <project> --file <path> --screenshot [--json]
          [--daemon-url <url>]
          [--workspace <id> --workspace-member <id>]
 
-Evaluate a selector expression against a project HTML file. This is not
-JavaScript and it does not capture a screenshot.
+Evaluate a selector expression against a project HTML file, or capture a
+headless PNG with --screenshot. Selector evaluation is not JavaScript.
 
 Expressions:
   document.querySelector("h1").textContent
@@ -143,13 +144,15 @@ function isProbeResponse(value: unknown): value is {
   value: string | boolean | null;
   matched: boolean;
   limitation: string;
+  screenshot: string | null;
 } {
   if (!value || typeof value !== 'object') return false;
-  const record = value as { ok?: unknown; value?: unknown; matched?: unknown; limitation?: unknown };
+  const record = value as { ok?: unknown; value?: unknown; matched?: unknown; limitation?: unknown; screenshot?: unknown };
   return record.ok === true
     && (typeof record.value === 'string' || typeof record.value === 'boolean' || record.value === null)
     && typeof record.matched === 'boolean'
-    && typeof record.limitation === 'string';
+    && typeof record.limitation === 'string'
+    && (record.screenshot === null || typeof record.screenshot === 'string');
 }
 
 export async function runProbe(args: string[]): Promise<ProbeCliResult> {
@@ -168,15 +171,8 @@ export async function runProbe(args: string[]): Promise<ProbeCliResult> {
   if (Boolean(options.workspaceId) !== Boolean(options.workspaceMemberId)) {
     return fail('pass --workspace <id> and --workspace-member <id> together', undefined, undefined, 2);
   }
-  if (!options.expression) {
-    return fail(
-      options.screenshot
-        ? 'screenshot is unavailable on the HTML parse probe; pass --eval <expression>'
-        : 'probe requires --eval <expression>',
-      options.screenshot ? 'screenshot_unavailable' : undefined,
-      undefined,
-      2,
-    );
+  if (!options.expression && !options.screenshot) {
+    return fail('probe requires --eval <expression> or --screenshot', undefined, undefined, 2);
   }
 
   try {
@@ -193,7 +189,7 @@ export async function runProbe(args: string[]): Promise<ProbeCliResult> {
         },
         body: JSON.stringify({
           file: options.file,
-          expression: options.expression,
+          ...(options.expression ? { expression: options.expression } : {}),
           ...(options.screenshot ? { screenshot: true } : {}),
         }),
       },
@@ -209,8 +205,8 @@ export async function runProbe(args: string[]): Promise<ProbeCliResult> {
     if (options.json) {
       writeJson(payload);
     } else {
-      process.stdout.write(`${String(payload.value)}\n`);
-      if (options.screenshot) process.stderr.write(`${payload.limitation}\n`);
+      if (payload.value !== null) process.stdout.write(`${String(payload.value)}\n`);
+      if (typeof payload.screenshot === 'string') process.stdout.write(`${payload.screenshot}\n`);
     }
     return finish(0);
   } catch (error) {
