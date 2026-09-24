@@ -414,6 +414,8 @@ export interface AppConfig {
   agentId: string | null;
   skillId: string | null;
   designSystemId: string | null;
+  /** Workspace default inherited by new projects that omit designSystemId. */
+  defaultDesignSystemId?: string | null;
   theme?: AppTheme;
   accentColor?: string;
   // True once the user has been through the welcome onboarding modal at

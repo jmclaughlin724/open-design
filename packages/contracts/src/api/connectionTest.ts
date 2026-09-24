@@ -4,6 +4,7 @@
 // daemon module for why).
 import type { AgentCliEnvPrefs } from './app-config';
 import type { ReasoningExecutionRequestFields } from './reasoningExecution';
+import { parseUrl } from '../url-parse';
 
 export interface BaseUrlValidationResult {
   parsed?: ParsedBaseUrl;
@@ -23,10 +24,6 @@ export interface ParsedBaseUrl {
   hostname: string;
   toString(): string;
 }
-
-declare const URL: {
-  new(input: string): ParsedBaseUrl;
-};
 
 function normalizeBracketedIpv6(hostname: string): string {
   const stripped = hostname.startsWith('[') && hostname.endsWith(']')
@@ -170,7 +167,7 @@ export function validateBaseUrl(
 ): BaseUrlValidationResult {
   let parsed: ParsedBaseUrl;
   try {
-    parsed = new URL(String(baseUrl).replace(/\/+$/, ''));
+    parsed = parseUrl(String(baseUrl).replace(/\/+$/, ''));
   } catch {
     return { error: 'Invalid baseUrl' };
   }

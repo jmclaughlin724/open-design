@@ -268,10 +268,15 @@ async function resolveDeliverable(
   const baselineEntry = isPrototype && input.touchedPaths
     ? safeRelativeFile(input.baselineEntryFile)
     : null;
-  const selected = declared
-    ? files.find((file) => filePath(file) === declared) ?? null
-    : (baselineEntry ? files.find((file) => filePath(file) === baselineEntry) ?? null : null)
-      ?? inferredEntry(files, acceptedKinds);
+  let selected: ProjectFile | null = null;
+  if (declared) {
+    selected = files.find((file) => filePath(file) === declared) ?? null;
+  } else {
+    if (baselineEntry) {
+      selected = files.find((file) => filePath(file) === baselineEntry) ?? null;
+    }
+    selected ??= inferredEntry(files, acceptedKinds);
+  }
   if (!selected) {
     return { valid: false, validation: 'entry_missing' };
   }

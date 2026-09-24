@@ -34,6 +34,14 @@
       "types": "./dist/api/handoff.d.ts",
       "default": "./dist/api/handoff.mjs"
     },
+    "./api/absorbed-files": {
+      "types": "./dist/api/absorbed-files.d.ts",
+      "default": "./dist/api/absorbed-files.mjs"
+    },
+    "./api/design-context": {
+      "types": "./dist/api/design-context.d.ts",
+      "default": "./dist/api/design-context.mjs"
+    },
     "./api/providerModels": {
       "types": "./dist/api/providerModels.d.ts",
       "default": "./dist/api/providerModels.mjs"
@@ -53,6 +61,14 @@
     "./api/touchpointTestRuntime": {
       "types": "./dist/api/touchpointTestRuntime.d.ts",
       "default": "./dist/api/touchpointTestRuntime.mjs"
+    },
+    "./api/targets": {
+      "types": "./dist/api/targets.d.ts",
+      "default": "./dist/api/targets.mjs"
+    },
+    "./api/design-system-check": {
+      "types": "./dist/api/design-system-check.d.ts",
+      "default": "./dist/api/design-system-check.mjs"
     },
     "./runtime/deck-stage-fallback": {
       "types": "./dist/runtime/deck-stage-fallback.d.ts",
@@ -113,8 +129,9 @@
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "esbuild": "0.28.0",
-    "typescript": "5.9.3",
-    "vitest": "4.1.6"
+    "esbuild": "0.28.2",
+    "@types/node": "24.13.6",
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
   }
 }

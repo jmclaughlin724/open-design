@@ -41,6 +41,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -52,8 +53,19 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { Button } from '@open-design/components';
 import historyStyles from './chat/ConversationHistoryDock.module.css';
-import { hasOdCard, OD_NEXT_STRATEGY_ID, type ProjectMediaTask } from '@open-design/contracts';
+import {
+  hasOdCard,
+  OD_NEXT_STRATEGY_ID,
+  TOOL_ACTIVITY_KINDS,
+  type PlanTodoSnapshotItem,
+  type PlanUpdateSsePayload,
+  type ProjectMediaTask,
+  type ToolActivityKind,
+  type ToolActivitySsePayload,
+} from '@open-design/contracts';
+import rollupStyles from './stream-rollups.module.css';
 import { useAnalytics } from '../analytics/provider';
 import { getResolvedDeviceId } from '../analytics/client';
 import {
@@ -608,6 +620,8 @@ function chatArtifactKindLabel(kind: ProjectFile['kind'], t: TranslateFn): strin
 interface Props {
   messages: ChatMessage[];
   streaming: boolean;
+  toolActivity?: ToolActivitySsePayload | null;
+  planUpdate?: PlanUpdateSsePayload | null;
   loading?: boolean;
   error: string | null;
   // Identifies a pane-level error produced by an assistant run. This lets the
@@ -1298,9 +1312,120 @@ function NewSessionGlyph(): ReactElement {
   );
 }
 
+
+const TOOL_ACTIVITY_LABEL: Record<ToolActivityKind, keyof Dict> = {
+  writing: 'assistant.verbWriting',
+  editing: 'assistant.verbEditing',
+  reading: 'assistant.verbReading',
+  searching: 'assistant.verbSearching',
+  running: 'assistant.verbRunning',
+  fetching: 'assistant.verbFetching',
+  other: 'assistant.verbCalling',
+};
+
+function toolActivityChipLabel(
+  kind: ToolActivityKind,
+  count: number,
+  t: (key: keyof Dict) => string,
+): string {
+  const label = t(TOOL_ACTIVITY_LABEL[kind] ?? 'assistant.verbCalling');
+  return count > 1 ? `${label} ×${count}` : label;
+}
+
+function toolActivityChips(
+  payload: ToolActivitySsePayload | null,
+): Array<{ kind: ToolActivityKind; count: number }> {
+  if (!payload?.counts || typeof payload.counts !== 'object') return [];
+  const chips: Array<{ kind: ToolActivityKind; count: number }> = [];
+  for (const kind of TOOL_ACTIVITY_KINDS) {
+    const count = payload.counts[kind];
+    if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) continue;
+    chips.push({ kind, count: Math.floor(count) });
+  }
+  return chips;
+}
+
+function planTodos(payload: PlanUpdateSsePayload | null): PlanUpdateSsePayload['todos'] {
+  if (!payload || !Array.isArray(payload.todos)) return [];
+  return payload.todos.filter((todo: PlanTodoSnapshotItem) => (
+    typeof todo?.content === 'string' &&
+    todo.content.length > 0 &&
+    (todo.status === 'pending' ||
+      todo.status === 'in_progress' ||
+      todo.status === 'completed' ||
+      todo.status === 'stopped')
+  ));
+}
+
+function StreamRollupSlot({
+  toolActivity,
+  planUpdate,
+}: {
+  toolActivity: ToolActivitySsePayload | null;
+  planUpdate: PlanUpdateSsePayload | null;
+}) {
+  const t = useT();
+  const panelId = useId();
+  const [open, setOpen] = useState(true);
+  const chips = toolActivityChips(toolActivity);
+  const todos = planTodos(planUpdate);
+  if (chips.length === 0 && todos.length === 0) return null;
+  return (
+    <div className={rollupStyles.slot} data-testid="stream-rollups">
+      {chips.length > 0 ? (
+        <div className={rollupStyles.chips} data-testid="tool-activity-chips">
+          {chips.map((chip) => (
+            <span
+              className={rollupStyles.chip}
+              data-kind={chip.kind}
+              data-testid="tool-activity-chip"
+              key={chip.kind}
+            >
+              {toolActivityChipLabel(chip.kind, chip.count, t)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {todos.length > 0 ? (
+        <section className={rollupStyles.todos} data-testid="plan-update">
+          <Button
+            variant="ghost"
+            className={rollupStyles.toggle}
+            aria-expanded={open}
+            aria-controls={panelId}
+            onClick={() => setOpen((current) => !current)}
+          >
+            {t('tool.todos')}
+          </Button>
+          <div
+            id={panelId}
+            className={`accordion-collapsible${open ? ' open' : ''}`}
+          >
+            <div className="accordion-collapsible-inner">
+              <ul className={rollupStyles.list}>
+                {todos.map((todo) => (
+                  <li
+                    className={rollupStyles.item}
+                    data-status={todo.status}
+                    key={`${todo.status}:${todo.content}`}
+                  >
+                    {todo.content}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 export function ChatPane({
   messages,
   streaming,
+  toolActivity = null,
+  planUpdate = null,
   loading = false,
   sendDisabled = false,
   viewerOnly = false,
@@ -1717,7 +1842,7 @@ export function ChatPane({
    * 它们的依赖和生命周期本来就不一样。effect 不在时这里是空操作。
    */
   const scheduleFollowSyncRef = useRef<() => void>(() => {});
-  const chatRailHighlightTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const chatRailHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [chatRailHighlightedMessageId, setChatRailHighlightedMessageId] =
     useState<string | null>(null);
   const prevStreamingRef = useRef(streaming);
@@ -4638,6 +4763,7 @@ export function ChatPane({
                     有意的:它跟着用户的滚动走,立刻出现比补一段 200ms 淡入更跟手。
                     没有 Plan 那一路 Jump 仍旧常驻,进 / 退场 transition 完整播放。
                     会话历史打开时也不删它(OPEND-2420),遮挡仍由堆叠层负责。 */}
+                <StreamRollupSlot toolActivity={toolActivity} planUpdate={planUpdate} />
                 <div
                   className={`chat-bottom-float-slot${planPillVisible ? ' has-plan-pill' : ''}`}
                   data-testid="chat-bottom-float-slot"
@@ -6628,7 +6754,7 @@ const UserMessage = memo(UserMessageImpl);
   const attachments = sortChatAttachmentsForDisplay(message.attachments ?? []);
   const commentAttachments = message.commentAttachments ?? [];
   const [copied, setCopied] = useState(false);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const isDesignSystemWorkspaceRequest = isDesignSystemWorkspacePrompt(message.content);
   /* 设计系统交接会把一整段给 agent 的实现 prompt 写进对话。用户这一侧要看到的
      不是那段 prompt,而是稿子第「设计系统工作区 · 自动创建」格的那张状态卡

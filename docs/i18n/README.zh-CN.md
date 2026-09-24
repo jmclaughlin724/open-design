@@ -552,7 +552,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 
 | 层 | 技术栈 |
 |---|---|
-| 前端 | Next.js 16 App Router + React 18 + TypeScript |
+| 前端 | Next.js 16 App Router + React 19.3 + TypeScript |
 | 守护进程 | Node 24 · Express · SSE 流式传输 · `better-sqlite3` |
 | 存储 | 在修改或记录 daemon 存储路径之前，必须阅读仓库根目录 `AGENTS.md` 中的 **Daemon data directory contract**。本 README 不得复述该契约。 |
 | 预览 | 文件系统运行渲染规范项目文件；BYOK/纯 API 运行将一个完整 `<artifact>` 块解析到沙箱 `srcdoc` iframe |

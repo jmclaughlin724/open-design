@@ -1,0 +1,50 @@
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 8px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.todos {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.toggle {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.list {
+  margin: 0;
+  padding: 0 12px 8px 28px;
+  font-size: 13px;
+}
+
+.item[data-status='completed'] {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.item[data-status='in_progress'] {
+  color: var(--text);
+}

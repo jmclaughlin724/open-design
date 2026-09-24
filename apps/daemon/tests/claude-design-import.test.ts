@@ -91,7 +91,12 @@ describe('importClaudeDesignZip', () => {
     try {
       const result = await importClaudeDesignZip(zipPath, projectDir);
       expect(result.entryFile).toBe('index.html');
-      expect(result.files.sort()).toEqual(['docs/empty.md', 'index.html']);
+      expect(result.files.sort()).toEqual([
+        'docs/empty.md',
+        'index.html',
+        'source/claude-design-evidence.md',
+        'source/claude-design-tokens.css',
+      ]);
       const empty = readFileSync(path.join(projectDir, 'docs/empty.md'));
       expect(empty.length).toBe(0);
     } finally {

@@ -500,6 +500,77 @@ export interface StrategyTaskContinuationDiagnostic extends ChatSseDiagnosticPay
   taskRunIndex: number | null;
 }
 
+/**
+ * Cross-runtime tool kinds for periodic activity roll-ups. Counts are since
+ * the previous emission, not since the start of the run. Unknown kinds are
+ * omitted by producers; consumers ignore kinds they do not render.
+ */
+export const TOOL_ACTIVITY_KINDS = [
+  'writing',
+  'editing',
+  'reading',
+  'searching',
+  'running',
+  'fetching',
+  'other',
+] as const;
+
+export type ToolActivityKind = (typeof TOOL_ACTIVITY_KINDS)[number];
+
+/**
+ * Periodic roll-up of normalized tool calls. Live-only: not a persisted
+ * agent event. Absent frames must not change the chat.
+ */
+export interface ToolActivitySsePayload {
+  /** Tool kind → count since the previous emission. Zero counts are omitted. */
+  counts: Partial<Record<ToolActivityKind, number>>;
+}
+
+export type PlanTodoStatus = 'pending' | 'in_progress' | 'completed' | 'stopped';
+
+export interface PlanTodoSnapshotItem {
+  content: string;
+  status: PlanTodoStatus;
+  activeForm?: string;
+}
+
+/**
+ * Todo-list snapshot from a CLI that emits a plan structurally. Prose plans
+ * are not this event — producers omit the frame instead of guessing.
+ * Live-only: not a persisted agent event.
+ */
+export interface PlanUpdateSsePayload {
+  todos: PlanTodoSnapshotItem[];
+}
+
+export type PromotionPrState = 'open' | 'merged' | 'closed' | 'none';
+
+export type PromotionCheckState = 'pending' | 'passing' | 'failing' | 'none';
+
+export interface PromotionStatusFile {
+  path: string;
+  /** `shipped` when promotion history contains the path; otherwise `pending`. */
+  state: 'pending' | 'shipped';
+}
+
+/**
+ * PR/CI status for one promotion. The poller emits this document; the
+ * chat-run sender publishes it. Poll only — no webhooks. Live-only.
+ */
+export interface PromotionStatusSsePayload {
+  projectId: string;
+  promotionId: string;
+  runId?: string;
+  prUrl: string | null;
+  prState: PromotionPrState;
+  checks: PromotionCheckState;
+  /** True while the parent should keep polling this promotion. */
+  open: boolean;
+  files: PromotionStatusFile[];
+  /** Unchanged shipped paths a later re-promote should skip. */
+  skip: string[];
+}
+
 export type ChatSseEvent =
   | SseTransportEvent<'start', ChatSseStartPayload>
   | SseTransportEvent<'run_retry_attempted', ChatSseRunRetryAttemptedPayload>
@@ -507,5 +578,8 @@ export type ChatSseEvent =
   | SseTransportEvent<'stdout', ChatSseChunkPayload>
   | SseTransportEvent<'stderr', ChatSseChunkPayload>
   | SseTransportEvent<'diagnostic', ChatSseDiagnosticPayload>
+  | SseTransportEvent<'tool_activity', ToolActivitySsePayload>
+  | SseTransportEvent<'plan_update', PlanUpdateSsePayload>
+  | SseTransportEvent<'promotion_status', PromotionStatusSsePayload>
   | SseTransportEvent<'error', SseErrorPayload>
   | SseTransportEvent<'end', ChatSseEndPayload>;

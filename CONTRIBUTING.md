@@ -293,7 +293,7 @@ For prompt-stack bugs ("the agent emitted a purple gradient hero, the slop black
 To keep the project focused, please don't open PRs that:
 
 - **Vendor a model runtime.** OD's whole bet is "your existing CLI is enough". We don't ship `pi-ai`, OpenAI keys, or model loaders.
-- **Rewrite the frontend away from the current stack without prior discussion.** Next.js 16 App Router + React 18 + TS is the line. No Astro, Solid, Svelte, or other framework rewrites unless maintainers explicitly want that migration.
+- **Rewrite the frontend away from the current stack without prior discussion.** Next.js 16 App Router + React 19.3 + TS is the line. No Astro, Solid, Svelte, or other framework rewrites unless maintainers explicitly want that migration.
 - **Replace the daemon with a serverless function.** The daemon's whole point is owning a real `cwd` and spawning a real CLI. Vercel deployment of the SPA is fine; the daemon stays a daemon.
 - **Add telemetry or outbound data collection outside the privacy contract.**
   Product analytics and masked session replay are consent-gated; scrubbed

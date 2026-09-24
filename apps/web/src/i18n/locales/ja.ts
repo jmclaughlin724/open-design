@@ -4382,7 +4382,7 @@ export const ja: Dict = {
   'dsManager.createTitle': '新しいデザインシステムを作成',
   'dsManager.createBody': 'ブランド・プロダクト・コード・アセット・デザインの参考資料を OpenDesign に学習させます。',
   'dsManager.createAction': '作成',
-  'dsManager.emptyMine': 'デザインシステムはまだありません。実際のプロダクトのコンテキストから作成し、下書きを確認してから今後のプロジェクト向けに公開します。',
+  'dsManager.emptyMine': 'デザインシステムはまだありません。',
   'dsManager.badgeDefault': 'デフォルト',
   'dsManager.rowMetaUpdated': 'あなた · 更新 {date}',
   'dsManager.edit': '編集',

@@ -18,6 +18,7 @@
 // stays identical — every variant reaches `usePlugin` through the
 // same callback wiring.
 
+import type { ReactElement } from 'react';
 import type {
   InstalledPluginRecord,
   WorkspaceCollabContext,
@@ -57,7 +58,7 @@ export function PluginDetailsModal({
   onSharePopoverItemClick,
 }: Props) {
   const preview = inferPluginPreview(record, { workspaceContext });
-  let detail: JSX.Element;
+  let detail: ReactElement;
 
   if (preview.kind === 'media') {
     detail = (

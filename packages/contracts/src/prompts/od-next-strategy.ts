@@ -162,6 +162,10 @@ export interface OdNextStrategyStableRequestContextV2 {
   memoryBody?: string | undefined;
   userInstructions?: string | undefined;
   projectInstructions?: string | undefined;
+  /** Compact absorbed-file digest. A fact. Omitted when the file is absent. */
+  designContextDigest?: string | undefined;
+  /** Compact connected-target digest. A fact. Omitted when no target context is persisted. */
+  targetContextDigest?: string | undefined;
 }
 
 export type OdNextStrategyContinuationV2 =
@@ -643,6 +647,8 @@ export function composeOdNextStrategyStableRequestContextV2(
   );
   factualText('active-design-system-fixture', context.designSystemFixtureHtml);
   factualText('active-design-system-pull-index', context.designSystemPullIndex);
+  factualText('absorbed-design-context', context.designContextDigest);
+  factualText('connected-target', context.targetContextDigest);
   instructionStructured('active-craft-sections', context.craftSections);
   instructionText('active-craft-guidance', context.craftBody);
 

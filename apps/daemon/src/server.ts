@@ -540,6 +540,7 @@ import { renderDesignSystemPreview } from './design-systems/preview.js';
 import { renderDesignSystemShowcase } from './design-systems/showcase.js';
 import { createChatRunService } from './runtimes/runs.js';
 import { reapLeftoverAgentProcesses, spawnAgentProcess } from './runtimes/agent-process.js';
+import { createRunStreamComposer } from './runtimes/run-stream-composer.js';
 import {
   createAmrTerminalReportDeliveryService,
   createAmrTerminalReportFinalizer,
@@ -659,6 +660,8 @@ import {
 } from './connectionTest.js';
 import { listProviderModels } from './integrations/provider-models.js';
 import { importClaudeDesignZip } from './design/index.js';
+import { readRunPromptDigests } from './design/prompt-digests.js';
+import { acquireTargetContext } from './targets/target-context.js';
 import {
   defaultBaseUrlForFinalizeProtocol,
   finalizeDesignPackage,
@@ -912,6 +915,18 @@ import { registerXaiRoutes } from './routes/xai.js';
 import { registerLiveArtifactRoutes } from './routes/live-artifact.js';
 import { registerDeliverableSyntaxToolRoutes } from './routes/deliverable-syntax-tool.js';
 import { registerDesignSystemToolRoutes } from './routes/design-system-tool.js';
+import { createPreviewTokenServeMiddleware, registerPreviewTokenRoutes } from './routes/preview-tokens.js';
+import { registerTargetRoutes } from './routes/targets.js';
+import { registerTargetContextRoutes } from './routes/target-context.js';
+import { registerStagedChangesRoutes } from './routes/staged-changes.js';
+import { registerTargetPromoteRoutes } from './routes/target-promote.js';
+import { registerDesignSystemCheckRoutes } from './routes/design-system-check.js';
+import { registerDesignSystemResolvedRoutes } from './routes/design-system-resolved.js';
+import { registerDesignSystemNotesRoutes } from './routes/design-system-notes.js';
+import { registerDesignContextRoutes } from './routes/design-context.js';
+import { registerRenderProbeRoutes } from './routes/render-probe.js';
+import { createRenderProbeHtmlReader, locateRenderProbeFile } from './services/render-probe.js';
+import { captureHtmlFileScreenshot } from './services/render-probe-screenshot.js';
 import { registerDeployRoutes, registerDeploymentCheckRoutes } from './routes/deploy.js';
 import { registerMediaRoutes } from './routes/media.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes, createEnforceWorkspaceProjectMutation } from './routes/project/index.js';
@@ -8951,6 +8966,89 @@ export async function startServer({
     fetchProjectCreationWorkspaceDirectory,
     enforceWorkspaceProjectMutation: enforceAuthoritativeProjectMutation,
   });
+  registerTargetRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    auth: authDeps,
+    projectStore: projectStoreDeps,
+    authorizeProjectRequest,
+    afterBind: async (projectId, metadata) => {
+      await acquireTargetContext({
+        projectsRoot: PROJECTS_DIR,
+        projectId,
+        metadata,
+        runtimeDataDir: RUNTIME_DATA_DIR_CANONICAL,
+      });
+    },
+  });
+  registerTargetContextRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    projectFiles: projectFileDeps,
+    authorizeProjectRequest,
+  });
+  registerStagedChangesRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    authorizeProjectRequest,
+  });
+  registerTargetPromoteRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    authorizeProjectRequest,
+  });
+  registerDesignSystemCheckRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    authorizeProjectRequest,
+  });
+  registerDesignSystemResolvedRoutes(app, {
+    db,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    authorizeProjectRequest,
+  });
+  registerDesignSystemNotesRoutes(app, {
+    paths: pathDeps,
+  });
+  registerDesignContextRoutes(app, {
+    db,
+    http: httpDeps,
+    paths: pathDeps,
+    projectStore: projectStoreDeps,
+    projectFiles: projectFileDeps,
+    authorizeProjectRequest,
+  });
+  const renderProbeFiles = createRenderProbeHtmlReader({
+    projectsRoot: PROJECTS_DIR,
+    getProject: (id) => getProject(db, id),
+  });
+  registerRenderProbeRoutes(app, {
+    authorizeProjectRequest,
+    http: httpDeps,
+    projectExists: renderProbeFiles.projectExists,
+    readHtml: renderProbeFiles.readHtml,
+    artifactsRoot: ARTIFACTS_DIR,
+    captureScreenshot: captureHtmlFileScreenshot,
+    locateFile: (projectId, file) => {
+      const project = getProject(db, projectId);
+      return locateRenderProbeFile({
+        projectsRoot: PROJECTS_DIR,
+        projectId,
+        file,
+        ...(project?.metadata === undefined ? {} : { metadata: project.metadata }),
+      });
+    },
+  });
 
   // Whether the caller may mutate (edit / publish-toggle / delete) a design
   // system. A system pulled from a teammate's team share (`teamSynced` in its
@@ -9189,6 +9287,15 @@ export async function startServer({
     paths: pathDeps,
     projects: { getProject: (id: string) => getProject(db, id) },
   });
+  const previewTokens = registerPreviewTokenRoutes(app, {
+    authorizeProjectRequest,
+    getProject: (id) => getProject(db, id),
+  });
+  const previewTokenServe = createPreviewTokenServeMiddleware(previewTokens, {
+    isSameOrigin: (req) => isLocalSameOrigin(req, resolvedPort),
+  });
+  app.use('/artifacts', previewTokenServe);
+  app.use('/frames', previewTokenServe);
   app.use('/artifacts', express.static(ARTIFACTS_DIR));
   app.use(
     PLUGIN_PREVIEWS_ROUTE,
@@ -10204,6 +10311,18 @@ export async function startServer({
       userInstructions = appConfigForPrompt.customInstructions;
     }
     const projectInstructions = project?.customInstructions ?? '';
+    let designContextDigest: string | undefined;
+    let targetContextDigest: string | undefined;
+    if (project?.id) {
+      try {
+        const promptRoot = resolveProjectDir(PROJECTS_DIR, project.id, project.metadata);
+        const digests = await readRunPromptDigests(promptRoot);
+        designContextDigest = digests.designContextDigest;
+        targetContextDigest = digests.targetContextDigest;
+      } catch {
+        // A missing project folder omits the digests. It does not fail the run.
+      }
+    }
 
     let designSystemBody;
     let designSystemTitle;
@@ -10530,6 +10649,8 @@ export async function startServer({
       designSystemFixtureHtml,
       designSystemPullIndex,
       designSystemImportMode,
+      ...(designContextDigest ? { designContextDigest } : {}),
+      ...(targetContextDigest ? { targetContextDigest } : {}),
       craftBody,
       craftSections,
       memoryBody,
@@ -10678,6 +10799,8 @@ export async function startServer({
           designSystemFixtureHtml,
           designSystemPullIndex,
           designSystemImportMode,
+          ...(designContextDigest ? { designContextDigest } : {}),
+          ...(targetContextDigest ? { targetContextDigest } : {}),
           craftBody,
           craftSections,
           memoryBody,
@@ -11009,7 +11132,9 @@ export async function startServer({
         odNextTaskInputSnapshot = null;
       }
     };
+    let streamComposer = null;
     const finishRun = (status, code = null, signal = null) => {
+      for (const frame of streamComposer?.flush() ?? []) send(frame.event, frame.data);
       cleanupOdNextRunInputProjection();
       finalizeRunMessageEvents(db, run);
       return design.runs.finish(run, status, code, signal);
@@ -15233,6 +15358,7 @@ export async function startServer({
     // coverage. observe runs AFTER the send so a `tool_loop` warning/halt
     // follows the result that triggered it in the stream. (PR #3375 review:
     // Copilot and ACP bypassed the guard by calling send('agent', …) directly.)
+    streamComposer = createRunStreamComposer();
     function emitAgentEvent(ev: any) {
       /*
        * 思考流的剧场语法剥离 —— 位置是判据的一部分,不是随手挑的。
@@ -15274,6 +15400,7 @@ export async function startServer({
       // set by the time finish() derives run.endedWithUnfinishedWork (#1247/#1060).
       captureRunWorkCompletenessSignals(run, ev);
       noteFirstOutputEvent(ev);
+      for (const frame of streamComposer.observe(ev)) send(frame.event, frame.data);
       send('agent', ev);
       observeToolEventForLoop(ev);
       /*

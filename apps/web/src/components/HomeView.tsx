@@ -84,6 +84,7 @@ import {
   pushRecentLinkedDir,
 } from '../providers/registry';
 import { isOpenDesignHostAvailable, pickHostWorkingDir } from '@open-design/host';
+import type { OpenDesignHostProjectImportSuccess } from '@open-design/host';
 import type {
   DesignSystemSummary,
   Project,
@@ -99,6 +100,15 @@ import {
   requiredInputsAreUserFillable,
 } from '../utils/pluginRequiredInputs';
 import { HomeHero, type ExamplePromptInfo, type HomeHeroHandle } from './HomeHero';
+import {
+  EntryComposerContextChips,
+  entryComposerContextChips,
+  StartFromCodeToggle,
+  TemplateStarterChips,
+} from './entry-composer-context';
+import { DesignTemplateCatalog, templateTitlesFromPlugins } from './project-list-affordances';
+import { useOpenFolderImport } from './useOpenFolderImport';
+import { AppWashKineticGrid } from './AppWashKineticGrid';
 import { findChip, HOME_HERO_CHIPS, type HomeHeroChip } from './home-hero/chips';
 import {
   legacyPrototypeSceneForChipId,
@@ -293,6 +303,11 @@ interface Props {
   collapseSignal?: number;
   skills?: SkillSummary[];
   skillsLoading?: boolean;
+  designTemplates?: SkillSummary[];
+  agentId?: string | null;
+  agentName?: string | null;
+  onImportFolder?: (baseDir: string) => Promise<void> | void;
+  onImportFolderResponse?: (response: OpenDesignHostProjectImportSuccess) => Promise<void> | void;
   connectors?: ConnectorDetail[];
   promptTemplates?: PromptTemplateSummary[];
   // Personalized first-run starting point (spec §7). Null unless the user just
@@ -511,6 +526,11 @@ export function HomeView({
   collapseSignal,
   skills = EMPTY_SKILLS,
   skillsLoading = false,
+  designTemplates = EMPTY_SKILLS,
+  agentId = null,
+  agentName = null,
+  onImportFolder,
+  onImportFolderResponse,
   connectors = EMPTY_CONNECTORS,
   promptTemplates = EMPTY_PROMPT_TEMPLATES,
   recommendation = null,
@@ -628,6 +648,11 @@ export function HomeView({
   const [activeSkill, setActiveSkill] = useState<SkillSummary | null>(null);
   const [activeSkillCatalogScope, setActiveSkillCatalogScope] =
     useState<LocalCatalogScope | null>(null);
+  const folderImport = useOpenFolderImport({
+    skillId: activeSkill?.id ?? null,
+    ...(onImportFolder ? { onImportFolder } : {}),
+    ...(onImportFolderResponse ? { onImportFolderResponse } : {}),
+  });
   const [selectedPluginContexts, setSelectedPluginContexts] = useState<SelectedPluginContext[]>([]);
   const [selectedMcpContexts, setSelectedMcpContexts] = useState<SelectedMcpContext[]>([]);
   const [selectedConnectorContexts, setSelectedConnectorContexts] = useState<SelectedConnectorContext[]>([]);
@@ -3096,6 +3121,7 @@ export function HomeView({
   const recentProjectsEmpty = !projectsLoading && projects.length === 0;
 
   return (
+    <>
     <div
       className={`home-view${recentProjectsEmpty ? ' home-view--centered' : ''}${
         variant === 'dock' ? ' home-view--dock' : ''
@@ -3129,6 +3155,32 @@ export function HomeView({
         onPromptChange={handlePromptChange}
         onSubmit={submit}
         onSubmitScenario={submitScenario}
+        composerContextSlot={(
+          <>
+            <EntryComposerContextChips
+              chips={entryComposerContextChips({
+                designSystemId,
+                designSystemTitle: designSystems.find((system) => system.id === designSystemId)?.title ?? null,
+                agentId,
+                agentName,
+                skillId: activeSkill?.id ?? null,
+                skillTitle: activeSkill ? localizeSkillName(locale, activeSkill) : null,
+              })}
+            />
+            <TemplateStarterChips
+              templates={designTemplates}
+              titles={templateTitlesFromPlugins(plugins)}
+              onPick={(template, starterPrompt) => {
+                useSkill(template, starterPrompt);
+              }}
+            />
+            <StartFromCodeToggle
+              available={folderImport.available}
+              onOpen={async () => (await folderImport.openFolder()) === 'imported'}
+            />
+          </>
+        )}
+        sessionMode={sessionMode}
         submitting={sending}
         activePluginTitle={activeBadgeTitle}
         activePluginIsExplicit={activePluginIsExplicit}
@@ -3463,6 +3515,8 @@ export function HomeView({
         </Dialog>
       ) : null}
     </div>
+    <DesignTemplateCatalog templates={designTemplates} titles={templateTitlesFromPlugins(plugins)} />
+    </>
   );
 }
 

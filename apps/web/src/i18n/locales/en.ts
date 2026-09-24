@@ -4396,7 +4396,7 @@ export const en: Dict = {
   'dsManager.createTitle': 'Create new design system',
   'dsManager.createBody': 'Teach OpenDesign your brand, product, code, assets, and design references.',
   'dsManager.createAction': 'Create',
-  'dsManager.emptyMine': 'No design systems yet. Create one from real product context, review the draft, then publish it for future projects.',
+  'dsManager.emptyMine': 'No design systems yet.',
   'dsManager.badgeDefault': 'Chat default',
   'dsManager.rowMetaUpdated': 'You · updated {date}',
   'dsManager.edit': 'Edit',

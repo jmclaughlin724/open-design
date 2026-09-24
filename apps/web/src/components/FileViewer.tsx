@@ -36,6 +36,11 @@ import {
   type PreviewRuntimeState,
 } from '@open-design/contracts/runtime/preview-runtime-state';
 import {
+  COMMENT_ANCHOR_MOVED_MESSAGE_TYPE,
+  COMMENT_ANCHOR_WATCH_MESSAGE_TYPE,
+  parseCommentAnchorMovedMessage,
+} from '@open-design/contracts/runtime/html-injection-points';
+import {
   appendResourceQuery,
   workspaceIdentityCacheKey,
   workspaceProjectHeaders,
@@ -253,6 +258,7 @@ import {
 } from './PreviewDrawOverlay';
 import {
   buildBoardCommentAttachments,
+  commentAnchorWatchList,
   commentSnapshotEqual,
   commentTargetDisplayName,
   commentVisibleOnDeckSlide,
@@ -263,6 +269,8 @@ import {
   overlayBoundsFromSnapshot,
   planLostAnchorWriteBacks,
   provisionalNextPinNumber,
+  reanchorCommentSnapshot,
+  acceptCommentAnchorMoved,
   resolveCommentAnchor,
   selectionKindLabel,
   targetFromSnapshot,
@@ -8486,6 +8494,7 @@ function HtmlViewer({
   const isActivePreviewIframeSource = useCallback((source: MessageEventSource | null) => {
     return workspaceActive && !!source && source === iframeRef.current?.contentWindow;
   }, [workspaceActive]);
+  const commentAnchorWatchRef = useRef<Array<{ elementId: string; selector: string }>>([]);
   const isOurPreviewIframeSource = useCallback((source: MessageEventSource | null) => {
     if (!workspaceActive || !source) return false;
     return (
@@ -11001,6 +11010,10 @@ function HtmlViewer({
       enabled: boardMode,
       mode: boardTool,
     }, '*');
+    win.postMessage({
+      type: COMMENT_ANCHOR_WATCH_MESSAGE_TYPE,
+      anchors: commentAnchorWatchRef.current,
+    }, '*');
     win.postMessage({ type: 'od-edit-mode', enabled: manualEditMode }, '*');
     win.postMessage({
       type: 'od-edit-selected-target',
@@ -12399,6 +12412,21 @@ function HtmlViewer({
         points?: StrokePoint[];
       }) | null;
       if (!data?.type) return;
+      if (data.type === COMMENT_ANCHOR_MOVED_MESSAGE_TYPE) {
+        const message = parseCommentAnchorMovedMessage(ev.data);
+        if (!message || ev.source == null) return;
+        setLiveCommentTargets((current) => (
+          acceptCommentAnchorMoved({
+            data: ev.data,
+            source: ev.source,
+            frame: ev.source,
+            targets: current,
+          }) ?? current
+        ));
+        setActiveCommentTarget((current) => reanchorCommentSnapshot(current, message));
+        setHoveredCommentTarget((current) => reanchorCommentSnapshot(current, message));
+        return;
+      }
       if (data.type === 'od:comment-targets' && Array.isArray(data.targets)) {
         const next = new Map<string, PreviewCommentSnapshot>();
         data.targets.forEach((item) => {
@@ -15727,6 +15755,19 @@ function HtmlViewer({
       .sort((a, b) => commentCreatedAt(a) - commentCreatedAt(b)),
     [file.name, previewComments],
   );
+  commentAnchorWatchRef.current = boardMode
+    ? commentAnchorWatchList(creationSortedSideComments)
+    : [];
+  useEffect(() => {
+    if (!workspaceActive) return;
+    const message = {
+      type: COMMENT_ANCHOR_WATCH_MESSAGE_TYPE,
+      anchors: commentAnchorWatchRef.current,
+    };
+    for (const frame of [iframeRef.current, urlPreviewIframeRef.current, srcDocPreviewIframeRef.current]) {
+      frame?.contentWindow?.postMessage(message, '*');
+    }
+  }, [boardMode, creationSortedSideComments, workspaceActive]);
   // Provisional number for the next (not-yet-saved) pin. Computed over the
   // file's comments across ALL statuses — a resolved/attached/failed comment
   // keeps its pin_seq row in the daemon DB, so its number stays retired even

@@ -4382,7 +4382,7 @@ export const id: Dict = {
   'dsManager.createTitle': 'Buat design system baru',
   'dsManager.createBody': 'Ajarkan OpenDesign tentang brand, produk, kode, aset, dan referensi desain Anda.',
   'dsManager.createAction': 'Buat',
-  'dsManager.emptyMine': 'Belum ada design system. Buat dari konteks produk nyata, tinjau drafnya, lalu terbitkan untuk proyek mendatang.',
+  'dsManager.emptyMine': 'Belum ada design system.',
   'dsManager.badgeDefault': 'Default',
   'dsManager.rowMetaUpdated': 'Anda · diperbarui {date}',
   'dsManager.edit': 'Edit',

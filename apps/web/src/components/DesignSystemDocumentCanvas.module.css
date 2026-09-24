@@ -1,0 +1,266 @@
+.tokens {
+  /* Scope class for injected tokens.css. No paint of its own. */
+}
+
+.root {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100%;
+  background: var(--bg, #f7f7f5);
+  color: var(--text, #1c1b19);
+}
+
+.outline {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 16px;
+  border-right: 1px solid var(--border, #e4e1d8);
+}
+
+.kicker,
+.groupLabel,
+.sectionId {
+  margin: 0;
+  color: var(--text-muted, #6f6a60);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.outlineList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outlineButton,
+.action,
+.submit,
+.cancel {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.outlineButton {
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.outlineButton[aria-current='true'] {
+  background: var(--bg-panel, #fff);
+  color: var(--text-strong, #111);
+  box-shadow: inset 0 0 0 1px var(--border, #e4e1d8);
+}
+
+.document {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 24px 28px 40px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.meta,
+.empty,
+.usage,
+.tokenValue,
+.status {
+  margin: 0;
+  color: var(--text-muted, #6f6a60);
+  font-size: 13px;
+}
+
+.status {
+  padding: 24px 28px;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tokenList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.token {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 180px;
+  max-width: 280px;
+  padding: 6px 8px;
+  border: 1px solid var(--border, #e4e1d8);
+  border-radius: 8px;
+  background: var(--bg-panel, #fff);
+}
+
+.swatch {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--border, #e4e1d8) 70%, transparent);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 4%);
+}
+
+.swatchValue {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--bg, #f7f7f5);
+  color: var(--text-strong, #111);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.tokenCopy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.tokenName,
+.tokenValue,
+.usage {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tokenName {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border, #e4e1d8);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 18px;
+}
+
+.body {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.body :global(p),
+.body :global(ul),
+.body :global(ol) {
+  margin: 0 0 8px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.action,
+.submit,
+.cancel {
+  padding: 5px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border, #e4e1d8);
+  background: var(--bg-panel, #fff);
+  font-size: 12px;
+}
+
+.action:hover,
+.submit:hover,
+.cancel:hover {
+  border-color: var(--accent, #111);
+}
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 520px;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px;
+  border: 1px solid var(--border, #e4e1d8);
+  border-radius: 8px;
+  background: var(--bg-panel, #fff);
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+
+.composerActions {
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .root {
+    grid-template-columns: 1fr;
+  }
+
+  .outline {
+    position: static;
+    border-right: 0;
+    border-bottom: 1px solid var(--border, #e4e1d8);
+  }
+}

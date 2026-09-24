@@ -4382,7 +4382,7 @@ export const de: Dict = {
   'dsManager.createTitle': 'Neues Designsystem erstellen',
   'dsManager.createBody': 'Bringen Sie OpenDesign Ihre Marke, Ihr Produkt, Ihren Code, Ihre Assets und Ihre Designreferenzen bei.',
   'dsManager.createAction': 'Erstellen',
-  'dsManager.emptyMine': 'Noch keine Designsysteme. Erstellen Sie eines aus echtem Produktkontext, prüfen Sie den Entwurf und veröffentlichen Sie es dann für künftige Projekte.',
+  'dsManager.emptyMine': 'Noch keine Designsysteme.',
   'dsManager.badgeDefault': 'Standard',
   'dsManager.rowMetaUpdated': 'Sie · aktualisiert {date}',
   'dsManager.edit': 'Bearbeiten',

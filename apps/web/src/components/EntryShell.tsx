@@ -1894,6 +1894,11 @@ export function EntryShell({
                    was taken out (OPEND-2793) until phase three gives it a
                    template-bound shape. */
                 promptHandoff={homePromptHandoff}
+                designTemplates={designTemplates}
+                agentId={config.agentId}
+                agentName={agents.find((agent) => agent.id === config.agentId)?.name ?? null}
+                {...(onImportFolder ? { onImportFolder } : {})}
+                {...(onImportFolderResponse ? { onImportFolderResponse } : {})}
                 executionSwitcher={view === 'home' ? homeExecutionSwitcher : undefined}
               />
             </div>

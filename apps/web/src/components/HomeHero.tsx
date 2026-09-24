@@ -268,6 +268,7 @@ interface Props {
    * would need clearing to fire twice.
    */
   collapseSignal?: number;
+  composerContextSlot?: ReactNode;
 }
 
 type HomeMentionTab = 'all' | 'files' | 'plugins' | 'skills' | 'mcp' | 'connectors';
@@ -426,6 +427,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     recommendationSlot,
     variant = 'page',
     collapseSignal,
+    composerContextSlot,
   },
   ref,
 ) {
@@ -1652,6 +1654,11 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
           setComposerFocused(false);
         }}
       >
+      {composerContextSlot ? (
+        <div className="home-hero__context-slot" data-testid="home-hero-context-slot">
+          {composerContextSlot}
+        </div>
+      ) : null}
       <div
         className={`home-hero__input-card${
           authoringLayoutActive ? ' home-hero__input-card--compact-authoring' : ''
@@ -4000,7 +4007,7 @@ interface ShortcutsMenuProps {
   pendingPluginId: string | null;
   pluginsLoading: boolean;
   open: boolean;
-  refNode: RefObject<HTMLDivElement>;
+  refNode: RefObject<HTMLDivElement | null>;
   onOpenChange: (open: boolean) => void;
   onPickChip: (chip: HomeHeroChip) => void;
 }

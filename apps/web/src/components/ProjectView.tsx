@@ -92,7 +92,9 @@ import {
   type ByokChatProtocol,
   type ChatTaskExecutionAnalytics,
   type ProjectWorkspaceScope,
+  type PlanUpdateSsePayload,
   type ResearchOptions,
+  type ToolActivitySsePayload,
 } from '@open-design/contracts';
 import {
   anonymizeArtifactId,
@@ -2016,7 +2018,8 @@ function projectEventToAgentEvent(evt: ProjectEvent): LiveArtifactEventItem['eve
     // conversation re-read. It must be named here rather than left to fall
     // through — the tail of this function assumes whatever survives is a
     // live-artifact refresh and reads `evt.phase` off it.
-    evt.type === 'chat-artifact-refs-changed'
+    evt.type === 'chat-artifact-refs-changed' ||
+    evt.type === 'promotion_status'
   ) {
     return null;
   }
@@ -2642,6 +2645,8 @@ export function ProjectView({
   const [activePluginActionPaths, setActivePluginActionPaths] = useState<Set<string>>(() => new Set());
   const [hiddenAssistantPluginActionPaths, setHiddenAssistantPluginActionPaths] = useState<Set<string>>(() => new Set());
   const [forceStreamingPluginMessageIds, setForceStreamingPluginMessageIds] = useState<Set<string>>(() => new Set());
+  const [toolActivity, setToolActivity] = useState<ToolActivitySsePayload | null>(null);
+  const [planUpdate, setPlanUpdate] = useState<PlanUpdateSsePayload | null>(null);
   // True once the initial DB read for the active conversation has settled.
   // Auto-send gates on this so it can't fire before listMessages resolves and
   // race-clobber the freshly-pushed user + assistant placeholder. Without
@@ -2669,6 +2674,12 @@ export function ProjectView({
   const [attachedComments, setAttachedComments] = useState<PreviewComment[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [streamingConversationId, setStreamingConversationId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!streaming) {
+      setToolActivity((prev) => (prev ? null : prev));
+      setPlanUpdate((prev) => (prev ? null : prev));
+    }
+  }, [streaming]);
   const [paneError, setPaneError] = useState<{
     message: string;
     sourceAssistantId: string | null;
@@ -5910,6 +5921,8 @@ export function ProjectView({
     streamingConversationIdRef.current = conversationId;
     setStreaming(true);
     setStreamingConversationId(conversationId);
+    setToolActivity(null);
+    setPlanUpdate(null);
   }, []);
 
   const clearStreamingMarker = useCallback((conversationId?: string | null) => {
@@ -7323,6 +7336,12 @@ export function ProjectView({
                 max: state.max,
                 phase: state.phase,
               });
+            },
+            onToolActivity: (payload: ToolActivitySsePayload) => {
+              setToolActivity(payload);
+            },
+            onPlanUpdate: (payload: PlanUpdateSsePayload) => {
+              setPlanUpdate(payload);
             },
             onDone: async () => {
               reattachHeardFromDaemon = true;
@@ -9532,6 +9551,12 @@ export function ProjectView({
             max: state.max,
             phase: state.phase,
           });
+        },
+        onToolActivity: (payload: ToolActivitySsePayload) => {
+          setToolActivity(payload);
+        },
+        onPlanUpdate: (payload: PlanUpdateSsePayload) => {
+          setPlanUpdate(payload);
         },
         onDone: (fullText = '') => {
           liveFocusClosed = true;
@@ -12117,6 +12142,8 @@ export function ProjectView({
             // there is nothing left for a visibility gate to decide.
             onSendQueuedNow: sendQueuedChatSendNow,
             onAssistantFeedback: handleAssistantFeedback,
+            toolActivity,
+            planUpdate,
           }
         : undefined,
     [
@@ -12137,9 +12164,11 @@ export function ProjectView({
       handleComposerSend,
       handleStop,
       messages,
+      planUpdate,
       removeQueuedChatSend,
       reorderCurrentConversationQueuedChatSends,
       sendQueuedChatSendNow,
+      toolActivity,
       updateQueuedChatSend,
     ],
   );
@@ -13685,6 +13714,8 @@ export function ProjectView({
               key={`${project.id}:${activeConversationId ?? 'conversation-unavailable'}:${chatSeed?.id ?? 'ready'}`}
               messages={messages}
               streaming={currentConversationControlStreaming}
+              toolActivity={streamingConversationId === activeConversationId ? toolActivity : null}
+              planUpdate={streamingConversationId === activeConversationId ? planUpdate : null}
               loading={currentConversationLoading}
               // A read-only viewer of a team-shared project cannot drive artifact
               // changes through chat (comments go through the separate overlay).

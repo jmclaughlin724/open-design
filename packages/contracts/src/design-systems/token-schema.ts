@@ -86,6 +86,11 @@ export type TokenSpec = {
    * is a CSS expression, typically `var(--name)`.
    */
   readonly aliasTo?: string;
+  /**
+   * Optional teaching notes. Brand packages may attach usage, derivation,
+   * and relations without changing the shared schema requirement.
+   */
+  readonly semantics?: import('./token-semantics.js').DesignTokenSemantics;
 };
 
 /* eslint-disable @typescript-eslint/no-inferrable-types */

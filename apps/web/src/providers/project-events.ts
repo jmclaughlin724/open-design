@@ -51,7 +51,8 @@ export type ProjectEvent =
   | ProjectLiveArtifactEvent
   | ProjectCollabInvalidationEvent
   | ProjectChatArtifactRefsChangedEvent
-  | ProjectContentTransferStateSsePayload;
+  | ProjectContentTransferStateSsePayload
+  | { type: 'promotion_status'; projectId?: string; prState?: string; checks?: string; open?: boolean };
 
 export interface ProjectEventsConnectionOptions {
   /** Test seam: substitute a mock EventSource constructor. */
@@ -212,6 +213,19 @@ export function createProjectEventsConnection(
         }
       });
     }
+    es.addEventListener('promotion_status', (evt) => {
+      try {
+        const data = JSON.parse((evt as MessageEvent).data) as {
+          projectId?: string;
+          prState?: string;
+          checks?: string;
+          open?: boolean;
+        };
+        onChange({ type: 'promotion_status', ...data });
+      } catch {
+        // A malformed status event must not drop the file stream.
+      }
+    });
     // A cover finished rendering after its turn already ended. Thin signal:
     // it names the stale message, and the consumer re-reads the conversation.
     es.addEventListener('chat-artifact-refs-changed', (evt) => {

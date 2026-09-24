@@ -115,6 +115,9 @@ export interface AppConfigPrefs {
   agentCliEnvIntent?: AgentCliEnvIntentPrefs;
   skillId?: string | null;
   designSystemId?: string | null;
+  // Workspace default applied when a new project omits designSystemId.
+  // An explicit per-project selection, including null, overrides this.
+  defaultDesignSystemId?: string | null;
   disabledSkills?: string[];
   disabledDesignSystems?: string[];
   installationId?: string | null;
@@ -150,6 +153,7 @@ const ALLOWED_KEYS: ReadonlySet<keyof AppConfigPrefs> = new Set([
   'agentCliEnvIntent',
   'skillId',
   'designSystemId',
+  'defaultDesignSystemId',
   'disabledSkills',
   'disabledDesignSystems',
   'installationId',
@@ -541,7 +545,7 @@ function applyConfigValue(
     if (typeof value === 'boolean') target[key] = value;
     return;
   }
-  if (key === 'agentId' || key === 'skillId' || key === 'designSystemId') {
+  if (key === 'agentId' || key === 'skillId' || key === 'designSystemId' || key === 'defaultDesignSystemId') {
     if (typeof value === 'string' || value === null) target[key] = value;
     return;
   }

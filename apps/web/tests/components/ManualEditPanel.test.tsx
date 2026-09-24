@@ -1,9 +1,7 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act } from 'react';
-import type { CSSProperties } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import { Simulate } from 'react-dom/test-utils';
-import { JSDOM } from 'jsdom';
+import { act, type CSSProperties } from 'react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import { ManualEditPanel, emptyManualEditDraft, manualEditPatchSummary, normalizeManualEditStyles, type ManualEditDraft } from '../../src/components/ManualEditPanel';
 import type { ProjectDesignTokenSuggestion, ProjectDesignTokenSuggestionProp } from '../../src/providers/registry';
 import { emptyManualEditStyles, type ManualEditPatch, type ManualEditStyles, type ManualEditTarget } from '../../src/edit-mode/types';
@@ -39,28 +37,21 @@ type OnCancelDraft = () => void;
 type OnResetDraft = () => void;
 type OnHistoryAction = () => void;
 
+function setNativeValue(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, value: string) {
+  fireEvent.change(element, { target: { value } });
+}
+
 describe('ManualEditPanel', () => {
-  let dom: JSDOM;
-  let host: HTMLDivElement;
-  let root: Root;
+  let host: HTMLElement;
+  let panel: ReturnType<typeof render> | undefined;
 
   beforeEach(() => {
-    dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>');
-    globalThis.window = dom.window as unknown as Window & typeof globalThis;
-    globalThis.document = dom.window.document;
-    globalThis.HTMLElement = dom.window.HTMLElement;
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    host = dom.window.document.querySelector('#root') as HTMLDivElement;
-    root = createRoot(host);
+    host = document.body;
   });
 
   afterEach(() => {
-    act(() => root.unmount());
-    dom.window.close();
-    Reflect.deleteProperty(globalThis, 'window');
-    Reflect.deleteProperty(globalThis, 'document');
-    Reflect.deleteProperty(globalThis, 'HTMLElement');
-    Reflect.deleteProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT');
+    panel = undefined;
+    cleanup();
   });
 
   it('renders the style inspector without the advanced editor entry', () => {
@@ -135,7 +126,7 @@ describe('ManualEditPanel', () => {
     if (!deleteButton) throw new Error('Delete button not found');
 
     act(() => {
-      deleteButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      deleteButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(footer?.contains(deleteButton)).toBe(true);
@@ -157,8 +148,8 @@ describe('ManualEditPanel', () => {
     if (!undo || !redo) throw new Error('History controls not found');
 
     act(() => {
-      undo.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      redo.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      undo.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      redo.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(undo.disabled).toBe(false);
@@ -180,9 +171,9 @@ describe('ManualEditPanel', () => {
     if (!reset || !cancel || !save) throw new Error('Footer action buttons not found');
 
     act(() => {
-      reset.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      cancel.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      save.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      reset.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      cancel.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      save.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onResetDraft).toHaveBeenCalledTimes(1);
@@ -198,8 +189,7 @@ describe('ManualEditPanel', () => {
     if (!textArea) throw new Error('Content textarea not found');
 
     act(() => {
-      textArea.value = 'Panel edited copy';
-      Simulate.change(textArea);
+      setNativeValue(textArea, 'Panel edited copy');
     });
 
     expect(onDraftChange).toHaveBeenCalledWith(expect.objectContaining({ text: 'Panel edited copy' }));
@@ -225,8 +215,7 @@ describe('ManualEditPanel', () => {
     expect(fontSelect.value).toBe('Roboto, Arial, sans-serif');
 
     act(() => {
-      fontSelect.value = 'Georgia, serif';
-      fontSelect.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      setNativeValue(fontSelect, 'Georgia, serif');
     });
 
     expect(onDraftChange).toHaveBeenCalledWith(expect.objectContaining({
@@ -270,9 +259,9 @@ describe('ManualEditPanel', () => {
     const trackingDecrease = stepper('Letter spacing', 'decrease');
 
     act(() => {
-      sizeIncrease.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      lineIncrease.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      trackingDecrease.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      sizeIncrease.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      lineIncrease.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      trackingDecrease.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onStyleChange).toHaveBeenCalledWith('hero-title', { fontSize: '33px' }, 'Style: Hero Title');
@@ -356,7 +345,7 @@ describe('ManualEditPanel', () => {
     const lineInput = rowInput('Line height');
 
     act(() => {
-      lineInput.dispatchEvent(new dom.window.FocusEvent('blur', { bubbles: true }));
+      lineInput.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
     });
 
     expect(onError).not.toHaveBeenCalled();
@@ -378,8 +367,7 @@ describe('ManualEditPanel', () => {
     const lineInput = rowInput('Line height');
 
     act(() => {
-      lineInput.value = '49px';
-      Simulate.change(lineInput);
+      setNativeValue(lineInput, '49px');
     });
 
     expect(onError).toHaveBeenCalledWith('');
@@ -410,12 +398,12 @@ describe('ManualEditPanel', () => {
     if (!bgSwatch) throw new Error('Background swatch not found');
 
     act(() => {
-      bgSwatch.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      bgSwatch.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     const colorTile = host.querySelector('button[aria-label="#3b82f6"]') as HTMLButtonElement | null;
     if (!colorTile) throw new Error('Background color tile not found');
     act(() => {
-      colorTile.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      colorTile.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onStyleChange).toHaveBeenCalledWith('__body__', { backgroundColor: '#3b82f6' }, 'Page styles');
@@ -439,8 +427,7 @@ describe('ManualEditPanel', () => {
     if (!fontSelect) throw new Error('Font select not found');
 
     act(() => {
-      fontSelect.value = 'Georgia, serif';
-      fontSelect.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      setNativeValue(fontSelect, 'Georgia, serif');
     });
 
     expect(onStyleChange).toHaveBeenCalledWith('__body__', { fontFamily: 'Georgia, serif' }, 'Page styles');
@@ -475,8 +462,7 @@ describe('ManualEditPanel', () => {
     if (!fontSelect) throw new Error('Font select not found');
 
     act(() => {
-      fontSelect.value = '';
-      fontSelect.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      setNativeValue(fontSelect, '');
     });
 
     expect(onStyleChange).toHaveBeenCalledWith('__body__', { fontFamily: '' }, 'Page styles');
@@ -510,8 +496,7 @@ describe('ManualEditPanel', () => {
     const align = rowSelect('Align');
     expect(align.disabled).toBe(false);
     act(() => {
-      align.value = 'center';
-      align.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      setNativeValue(align, 'center');
     });
     expect(onStyleChange).toHaveBeenCalledWith('hero-title', { textAlign: 'center' }, 'Style: Hero Title');
 
@@ -546,9 +531,8 @@ describe('ManualEditPanel', () => {
     expect(Array.from(rowSelect('Align').options).map((option) => option.value)).toContain('baseline');
 
     act(() => {
-      gapIncrease.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      directionSelect.value = 'column';
-      directionSelect.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      gapIncrease.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      setNativeValue(directionSelect, 'column');
     });
 
     expect(onStyleChange).toHaveBeenCalledWith('hero-title', { gap: '9px' }, 'Style: Hero Title');
@@ -573,14 +557,13 @@ describe('ManualEditPanel', () => {
 
     const topInput = quadCellInput('Padding', 'Top');
     act(() => {
-      topInput.value = '24';
-      Simulate.change(topInput);
+      setNativeValue(topInput, '24');
     });
     expect(onStyleChange).toHaveBeenCalledWith('hero-title', { paddingTop: '24px' }, 'Style: Hero Title');
 
     // Each side is its own longhand — nudging Right must not touch the others.
     act(() => {
-      stepper('Right', 'increase').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      stepper('Right', 'increase').dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(onStyleChange).toHaveBeenCalledWith('hero-title', { paddingRight: '9px' }, 'Style: Hero Title');
     expect(onStyleChange).not.toHaveBeenCalledWith(
@@ -605,8 +588,7 @@ describe('ManualEditPanel', () => {
 
     const bottomInput = quadCellInput('Margin', 'Bottom');
     act(() => {
-      bottomInput.value = '4';
-      Simulate.change(bottomInput);
+      setNativeValue(bottomInput, '4');
     });
     expect(onStyleChange).toHaveBeenCalledWith('hero-title', { marginBottom: '4px' }, 'Style: Hero Title');
 
@@ -614,7 +596,7 @@ describe('ManualEditPanel', () => {
     // the row stays readable without expanding it.
     const head = quadRow('Margin').querySelector('.cc-quad-head') as HTMLButtonElement;
     act(() => {
-      head.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      head.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(quadRow('Margin').querySelector('.cc-quad-grid')).toBeNull();
     expect(quadRow('Margin').querySelector('em')?.textContent).toBe('12');
@@ -626,8 +608,7 @@ describe('ManualEditPanel', () => {
 
     const borderWidth = rowInput('Border width');
     act(() => {
-      borderWidth.value = '3';
-      Simulate.change(borderWidth);
+      setNativeValue(borderWidth, '3');
     });
 
     expect(onStyleChange).toHaveBeenCalledWith(
@@ -645,7 +626,7 @@ describe('ManualEditPanel', () => {
     });
 
     act(() => {
-      Simulate.focus(rowInput('Text color'));
+      rowInput('Text color').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     });
 
     expect(onInspectValueSelect).toHaveBeenCalledWith('color', '#111111');
@@ -653,6 +634,27 @@ describe('ManualEditPanel', () => {
     expect(host.querySelector('.cc-suggest')).not.toBeNull();
     expect(host.querySelector('.cc-suggest-head')?.textContent).toContain('Reference values');
     expect(host.querySelector('.cc-suggest-head em')?.textContent).toBe('Text color');
+  });
+
+  it('puts token usage in the reference chip title when the suggestion carries it', () => {
+    renderPanel({
+      tokenSuggestions: [
+        tokenSuggestion({
+          prop: 'color',
+          token: '--brand-ink',
+          value: '#101828',
+          usage: 'Body text only; never for charts.',
+        }),
+      ],
+    });
+
+    act(() => {
+      rowInput('Text color').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+
+    expect(host.querySelector('.cc-suggest-chip')?.getAttribute('title')).toBe(
+      'Body text only; never for charts. — exact · design-system/tokens.css:12',
+    );
   });
 
   it('falls back to the computed value when asking for reference values', () => {
@@ -672,7 +674,7 @@ describe('ManualEditPanel', () => {
     });
 
     act(() => {
-      Simulate.focus(rowInput('Font size'));
+      rowInput('Font size').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     });
 
     expect(onInspectValueSelect).toHaveBeenCalledWith('fontSize', '18px');
@@ -690,7 +692,7 @@ describe('ManualEditPanel', () => {
     });
 
     act(() => {
-      Simulate.focus(rowInput('Text color'));
+      rowInput('Text color').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     });
 
     const chips = Array.from(host.querySelectorAll('.cc-suggest-chip'));
@@ -700,7 +702,7 @@ describe('ManualEditPanel', () => {
     expect(chips[0]?.querySelector('.cc-suggest-swatch')).not.toBeNull();
 
     act(() => {
-      chips[1]!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      chips[1]!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onApplyTokenSuggestion).toHaveBeenCalledWith('color', '#667085');
@@ -714,12 +716,12 @@ describe('ManualEditPanel', () => {
     });
 
     act(() => {
-      Simulate.focus(rowInput('Border width'));
+      rowInput('Border width').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     });
     const chip = host.querySelector('.cc-suggest-chip') as HTMLButtonElement | null;
     if (!chip) throw new Error('Border width reference chip not found');
     act(() => {
-      chip.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      chip.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     expect(onApplyTokenSuggestion).toHaveBeenCalledWith('borderTopWidth', '1px');
@@ -728,14 +730,14 @@ describe('ManualEditPanel', () => {
   it('distinguishes loading reference values from having none', () => {
     renderPanel({ tokenSuggestionsLoading: true });
     act(() => {
-      Simulate.focus(rowInput('Text color'));
+      rowInput('Text color').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     });
     expect(host.querySelector('.cc-suggest-empty')?.textContent).toBe('Loading…');
     expect(host.querySelector('.cc-suggest-chip')).toBeNull();
 
     renderPanel({ tokenSuggestions: [] });
     act(() => {
-      Simulate.focus(rowInput('Text color'));
+      rowInput('Text color').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     });
     expect(host.querySelector('.cc-suggest-empty')?.textContent).toBe('No matching reference values');
   });
@@ -745,7 +747,7 @@ describe('ManualEditPanel', () => {
       tokenSuggestions: [tokenSuggestion({ prop: 'color', token: '--brand-ink', value: '#101828' })],
     });
     act(() => {
-      Simulate.focus(rowInput('Text color'));
+      rowInput('Text color').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     });
     expect(host.querySelector('.cc-suggest')).not.toBeNull();
 
@@ -765,7 +767,7 @@ describe('ManualEditPanel', () => {
     });
 
     act(() => {
-      Simulate.focus(rowInput('Opacity'));
+      rowInput('Opacity').dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
     });
 
     expect(host.querySelector('.cc-suggest')).toBeNull();
@@ -907,8 +909,7 @@ describe('ManualEditPanel', () => {
       styles,
       outerHtml: target.outerHtml,
     };
-    act(() => {
-      root.render(
+    const element = (
         <ManualEditPanel
           targets={[target]}
           selectedTarget={selectedTarget}
@@ -937,8 +938,11 @@ describe('ManualEditPanel', () => {
           tokenSuggestionsLoading={tokenSuggestionsLoading}
           onApplyTokenSuggestion={onApplyTokenSuggestion}
           onInspectValueSelect={onInspectValueSelect}
-        />,
-      );
+        />
+    );
+    act(() => {
+      if (panel) panel.rerender(element);
+      else panel = render(element);
     });
   }
 

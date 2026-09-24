@@ -4382,7 +4382,7 @@ export const esES: Dict = {
   'dsManager.createTitle': 'Crear nuevo sistema de diseño',
   'dsManager.createBody': 'Enseña a OpenDesign tu marca, producto, código, recursos y referencias de diseño.',
   'dsManager.createAction': 'Crear',
-  'dsManager.emptyMine': 'Aún no hay sistemas de diseño. Crea uno a partir de contexto real del producto, revisa el borrador y publícalo para futuros proyectos.',
+  'dsManager.emptyMine': 'Aún no hay sistemas de diseño.',
   'dsManager.badgeDefault': 'Predeterminado',
   'dsManager.rowMetaUpdated': 'Tú · actualizado {date}',
   'dsManager.edit': 'Editar',

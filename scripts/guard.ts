@@ -6,6 +6,8 @@ import ts from "typescript";
 import { checkCrossAppImports } from "./check-cross-app-imports.ts";
 import { checkTsNocheckImports } from "./check-ts-nocheck-imports.ts";
 import { checkDesignSystemManifests } from "./check-design-system-manifests.ts";
+import { checkDesignSystemSectionCoverage } from "./check-design-system-section-coverage.ts";
+import { checkDesignTokenSemantics } from "./check-design-token-semantics.ts";
 import { checkDesignSystemPackageQuality } from "./check-design-system-package-quality.ts";
 import { checkDesignSystemComponentFixtureReport } from "./check-components-fixtures.ts";
 import { checkDesignSystemFlagParity } from "./check-design-system-flag-parity.ts";
@@ -1536,6 +1538,8 @@ const checks: GuardCheck[] = [
   { name: "HTML plugin preview contracts", run: ({ repoRoot: root }) => checkHtmlPluginPreviewContracts(root) },
   { name: "plugin preview manifest", run: checkPluginPreviewManifest },
   { name: "design system manifests", run: checkDesignSystemManifests },
+  { name: "design system section coverage", run: (context) => checkDesignSystemSectionCoverage(context.repoRoot) },
+  { name: "design token semantics", run: (context) => checkDesignTokenSemantics(context.repoRoot) },
   { name: "design system package quality", run: checkDesignSystemPackageQuality },
   { name: "design system component fixture report", run: checkDesignSystemComponentFixtureReport },
   { name: "design system token-fixture sync", run: checkDesignSystemTokenFixtureSync },

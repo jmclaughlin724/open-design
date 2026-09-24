@@ -23,7 +23,7 @@ import type {
   ChatCommentAttachment,
   ChatMessage,
 } from '../../types';
-import type { ChatSessionMode, WorkspaceCollabContext } from '@open-design/contracts';
+import type { ChatSessionMode, PlanUpdateSsePayload, ToolActivitySsePayload, WorkspaceCollabContext } from '@open-design/contracts';
 
 // ---------------------------------------------------------------------------
 // useConversationChat — drives a secondary ChatPane bound to a single
@@ -84,6 +84,8 @@ export interface UseConversationChatResult {
   ) => void;
   onRetry: (assistantMessage: ChatMessage) => void;
   onStop: () => void;
+  toolActivity: ToolActivitySsePayload | null;
+  planUpdate: PlanUpdateSsePayload | null;
 }
 
 export function useConversationChat(
@@ -94,6 +96,8 @@ export function useConversationChat(
   const { config, agentsById, locale } = ctx;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
+  const [toolActivity, setToolActivity] = useState<ToolActivitySsePayload | null>(null);
+  const [planUpdate, setPlanUpdate] = useState<PlanUpdateSsePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const messageScopeKey = `${projectId}\u0000${conversationId}`;
@@ -256,6 +260,8 @@ export function useConversationChat(
       messagesRef.current = nextMessages;
       setMessages(nextMessages);
       setStreaming(true);
+      setToolActivity(null);
+      setPlanUpdate(null);
       setError(null);
       if (!retryTarget) persist(userMsg);
 
@@ -292,6 +298,8 @@ export function useConversationChat(
         textBuffer.cancel();
         if (textBufferRef.current === textBuffer) textBufferRef.current = null;
         setStreaming(false);
+        setToolActivity(null);
+        setPlanUpdate(null);
       };
 
       const handlers = {
@@ -302,6 +310,12 @@ export function useConversationChat(
         onAgentEvent: (ev: AgentEvent) => {
           if (!acceptsCallback()) return;
           textBuffer.appendEvent(ev);
+        },
+        onToolActivity: (payload: ToolActivitySsePayload) => {
+          setToolActivity(payload);
+        },
+        onPlanUpdate: (payload: PlanUpdateSsePayload) => {
+          setPlanUpdate(payload);
         },
         onDone: () => {
           if (!acceptsCallback()) return;
@@ -434,6 +448,8 @@ export function useConversationChat(
     textBufferRef.current?.cancel();
     textBufferRef.current = null;
     setStreaming(false);
+    setToolActivity(null);
+    setPlanUpdate(null);
     setMessages((curr) => {
       const { messages: next, finalized } = finalizeActiveAssistantMessagesOnStop(curr, stoppedAt);
       for (const message of finalized) persist(message);
@@ -450,5 +466,7 @@ export function useConversationChat(
     onSend,
     onRetry,
     onStop,
+    toolActivity,
+    planUpdate,
   };
 }

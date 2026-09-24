@@ -8,6 +8,7 @@ import type {
 import type { ProjectSyncIntent, ProjectSyncIntentEvent, ProjectSyncState } from './project-sync.js';
 import type { TeamResourceState } from './team-resources.js';
 import type { WorkspaceCollabContext } from './collab.js';
+import type { ConnectedTarget } from './targets.js';
 
 export type ProjectKind =
   | 'prototype'
@@ -263,6 +264,13 @@ export interface ProjectMetadata {
   // where the user wanted the project to live without granting write access
   // to that path; actual filesystem roots still use baseDir/import flows.
   userWorkingDir?: string;
+  /**
+   * Deployment destination for draft-then-promote. This is not the project
+   * workspace: folder-import `baseDir` remains the direct-write opt-in.
+   * Daemon-owned — only POST/DELETE `/api/projects/:id/target` may change it.
+   * GitHub binds store owner/repo only; never a token.
+   */
+  connectedTarget?: ConnectedTarget;
   imageModel?: string;
   imageAspect?: MediaAspect;
   imageStyle?: string;
@@ -528,6 +536,7 @@ export interface ProjectDesignTokenSuggestion {
   line: number;
   matchReason: string;
   score: number;
+  usage?: string;
 }
 
 export interface ProjectDesignTokenSuggestionsResponse {

@@ -543,7 +543,7 @@ Plugin registry endpoint: `GET /api/plugins`. ภาพรวม directory → [
 
 | Layer | Stack |
 |---|---|
-| Frontend | Next.js 16 App Router + React 18 + TypeScript |
+| Frontend | Next.js 16 App Router + React 19.3 + TypeScript |
 | Daemon | Node 24 · Express · SSE streaming · `better-sqlite3` |
 | Storage | ก่อนแก้ไขหรืออธิบาย daemon storage paths ต้องอ่าน **Daemon data directory contract** ใน `AGENTS.md` ที่ราก repo; README นี้ต้องไม่ระบุ path ซ้ำ. |
 | Preview | Filesystem runs render canonical project files; BYOK/plain-API runs parse one complete `<artifact>` block into a sandboxed `srcdoc` iframe |

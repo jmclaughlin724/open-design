@@ -1,3 +1,5 @@
+import type { DesignTokenSemantics } from './token-semantics.js';
+
 export type DerivedDesignTokenBinding = {
   name: string;
   layer: string;
@@ -6,6 +8,7 @@ export type DerivedDesignTokenBinding = {
   reason: string;
   sources: readonly string[];
   sourceName?: string;
+  semantics?: DesignTokenSemantics;
 };
 
 export type DerivedDesignTokenReport = {
@@ -36,6 +39,7 @@ export function renderDesignTokensJson(input: {
       reason: binding.reason,
       sources: binding.sources,
       ...(binding.sourceName === undefined ? {} : { sourceName: binding.sourceName }),
+      ...(binding.semantics === undefined ? {} : { semantics: binding.semantics }),
     })),
   }, null, 2)}\n`;
 }

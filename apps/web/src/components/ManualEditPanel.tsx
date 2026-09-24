@@ -901,7 +901,9 @@ function StyleInspector({
                   key={`${suggestion.token}-${suggestion.value}-${index}`}
                   type="button"
                   className="cc-suggest-chip"
-                  title={`${suggestion.matchReason} · ${suggestion.sourceFile}:${suggestion.line}`}
+                  title={suggestion.usage
+                    ? `${suggestion.usage} — ${suggestion.matchReason} · ${suggestion.sourceFile}:${suggestion.line}`
+                    : `${suggestion.matchReason} · ${suggestion.sourceFile}:${suggestion.line}`}
                   onClick={() => onApplyTokenSuggestion?.(SUGGESTION_TO_STYLE_KEY[suggestion.prop], suggestion.value)}
                 >
                   {activeIsColor ? (

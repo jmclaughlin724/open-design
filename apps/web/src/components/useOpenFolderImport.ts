@@ -15,6 +15,8 @@ interface UseOpenFolderImportArgs {
   onImportFolderResponse?: (response: OpenDesignHostProjectImportSuccess) => Promise<void> | void;
 }
 
+export type FolderImportOutcome = 'imported' | 'canceled' | 'unavailable' | 'error';
+
 export function useOpenFolderImport({
   skillId,
   onImportFolder,
@@ -26,9 +28,9 @@ export function useOpenFolderImport({
   const hasHostPickAndImport = isOpenDesignHostAvailable();
   const available = hasHostPickAndImport ? Boolean(onImportFolderResponse) : Boolean(onImportFolder);
 
-  const openFolder = useCallback(async () => {
+  const openFolder = useCallback(async (): Promise<FolderImportOutcome> => {
     if (hasHostPickAndImport) {
-      if (!onImportFolderResponse) return;
+      if (!onImportFolderResponse) return 'unavailable';
       setError(null);
       setImporting(true);
       try {
@@ -36,34 +38,37 @@ export function useOpenFolderImport({
           skillId: skillId ?? null,
           workspaceContext: resolvedWorkspaceContextForWrite(workspaceContextState),
         });
-        if (!result) return;
+        if (!result) return 'canceled';
         if (result.ok === true) {
           await onImportFolderResponse(result);
-          return;
+          return 'imported';
         }
-        if ('canceled' in result && result.canceled === true) return;
+        if ('canceled' in result && result.canceled === true) return 'canceled';
         setError(formatPickAndImportFailure(result));
+        return 'error';
       } catch (err) {
         setError({
           message: err instanceof Error ? err.message : 'Failed to import folder',
         });
+        return 'error';
       } finally {
         setImporting(false);
       }
-      return;
     }
 
-    if (!onImportFolder) return;
+    if (!onImportFolder) return 'unavailable';
     setError(null);
     setImporting(true);
     try {
       const selectedPath = await pickLocalFolderPath();
-      if (!selectedPath) return;
+      if (!selectedPath) return 'canceled';
       await onImportFolder(selectedPath);
+      return 'imported';
     } catch (err) {
       setError({
         message: err instanceof Error ? err.message : 'Failed to import folder',
       });
+      return 'error';
     } finally {
       setImporting(false);
     }

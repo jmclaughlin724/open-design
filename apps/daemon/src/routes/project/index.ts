@@ -25,6 +25,8 @@ import {
   previewHtmlHasLoadTimeLocationNavigation,
 } from '@open-design/contracts/runtime/preview-guards';
 import {
+  buildCommentAnchorBridge,
+  COMMENT_ANCHOR_BRIDGE_MARKER,
   endOfTag,
   findRealElementRange,
   findRealTagEnd,
@@ -99,9 +101,15 @@ import {
   type ResolveSnapshotOk,
 } from '../../plugins/index.js';
 import { connectorService } from '../../connectors/service.js';
+import {
+  designSystemIdAfterValidation,
+  selectCreateDesignSystemId,
+} from '../../default-design-system.js';
 import type { RouteDeps } from '../../server-context.js';
 import { listSkills } from '../../skills.js';
 import { isSafeId } from '../../projects.js';
+import { emitPromotionStatus, PROMOTION_POLL_INTERVAL_MS } from '../../targets/promotion-loop.js';
+import { sameConnectedTarget } from '../../targets/parse.js';
 import {
   ensureTeamProjectCommentConversations,
   getFirstProjectConversation,
@@ -1790,7 +1798,11 @@ function injectUrlPreviewBridge(
     return injectBeforeBodyClose(html, 'data-od-url-scroll-bridge', URL_PREVIEW_SCROLL_BRIDGE);
   }
   if (bridge === 'selection') {
-    return injectBeforeBodyClose(html, 'data-od-url-selection-bridge', URL_PREVIEW_SELECTION_BRIDGE);
+    return injectBeforeBodyClose(
+      injectBeforeBodyClose(html, 'data-od-url-selection-bridge', URL_PREVIEW_SELECTION_BRIDGE),
+      COMMENT_ANCHOR_BRIDGE_MARKER,
+      buildCommentAnchorBridge(),
+    );
   }
   return injectBeforeBodyClose(html, 'data-od-url-snapshot-bridge', URL_PREVIEW_SNAPSHOT_BRIDGE);
 }
@@ -2043,6 +2055,7 @@ function cloneProjectMetadataForDuplicate(sourceProject: any): Record<string, un
   delete sourceMetadata.baseDir;
   delete sourceMetadata.projectLocationId;
   delete sourceMetadata.fromTrustedPicker;
+  delete sourceMetadata.connectedTarget;
   delete sourceMetadata.orchestratorWorkspace;
   return {
     ...sourceMetadata,
@@ -2177,7 +2190,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       : DEFAULT_PROJECT_CREATE_PREPARATION_TIMEOUT_MS;
   const projectTelemetry = ctx.telemetry;
   const { sendApiError, createSseResponse } = ctx.http;
-  const { DESIGN_SYSTEMS_DIR, PROJECTS_DIR, SKILLS_DIR, BRANDS_DIR, USER_DESIGN_SYSTEMS_DIR } = ctx.paths;
+  const { DESIGN_SYSTEMS_DIR, PROJECTS_DIR, SKILLS_DIR, BRANDS_DIR, USER_DESIGN_SYSTEMS_DIR, RUNTIME_DATA_DIR } = ctx.paths;
   const { readAppConfig, writeAppConfig } = ctx.appConfig;
   const {
     insertProject,
@@ -3864,7 +3877,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         context: localProjectWorkspaceAttribution(req),
       };
       learnAssertedWorkspaceType(createWorkspace.context);
-      const { id, name, projectLocationId, skillId, designSystemId, pendingPrompt, metadata, customInstructions, skipDiscoveryBrief } =
+      const { id, name, projectLocationId, skillId, pendingPrompt, metadata, customInstructions, skipDiscoveryBrief } =
         req.body || {};
       if (typeof id !== 'string' || !isSafeId(id)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'invalid project id');
@@ -3891,6 +3904,12 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           return sendApiError(
             res, 400, 'BAD_REQUEST',
             'fromTrustedPicker can only be set via POST /api/import/folder',
+          );
+        }
+        if ('connectedTarget' in metadata) {
+          return sendApiError(
+            res, 400, 'BAD_REQUEST',
+            'connectedTarget can only be set via POST /api/projects/:id/target',
           );
         }
         if ('orchestratorWorkspace' in metadata) {
@@ -3945,25 +3964,39 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       // snapshot while a Workspace switch is loading. Use the partition that
       // produced that exact selection for local lookup only. It does not bind
       // this local project to that Workspace or prove current membership.
+      const designSystemSelection = selectCreateDesignSystemId({
+        body: req.body,
+        workspaceDefaultId: (await readAppConfig(RUNTIME_DATA_DIR)).defaultDesignSystemId,
+      });
+      if (designSystemSelection.invalid) {
+        return sendApiError(res, 400, 'INVALID_DESIGN_SYSTEM', 'designSystemId must be a string or null');
+      }
       const designSystemValidation = await awaitProjectCreatePreparation<
         Awaited<ReturnType<typeof validateProjectDesignSystemId>>
       >(
         validateProjectDesignSystemId(
-          designSystemId,
+          designSystemSelection.id,
           designSystemCatalogScope ?? creationWorkspaceScope,
         ),
         projectCreatePreparationDeadline,
         'validating the selected design system',
       );
-      if (!designSystemValidation.ok) {
+      const resolvedDesignSystem = designSystemIdAfterValidation({
+        selection: designSystemSelection,
+        validationOk: designSystemValidation.ok,
+        validatedId: designSystemValidation.ok ? designSystemValidation.id : null,
+      });
+      if (!resolvedDesignSystem.ok) {
         return sendApiError(
           res,
           400,
-          designSystemValidation.code,
-          designSystemValidation.message,
+          designSystemValidation.ok ? 'INVALID_DESIGN_SYSTEM' : designSystemValidation.code,
+          designSystemValidation.ok
+            ? 'designSystemId must be a string or null'
+            : designSystemValidation.message,
         );
       }
-      const normalizedDesignSystemId = designSystemValidation.id;
+      const normalizedDesignSystemId = resolvedDesignSystem.id;
       const skillValidation = await awaitProjectCreatePreparation<
         Awaited<ReturnType<typeof validateProjectSkillId>>
       >(
@@ -5171,6 +5204,14 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             'metadata cannot be cleared while exampleBinding is daemon-owned',
           );
         }
+        if (existing?.metadata?.connectedTarget) {
+          return sendApiError(
+            res,
+            400,
+            'BAD_REQUEST',
+            'metadata cannot be cleared while connectedTarget is daemon-owned',
+          );
+        }
         if (existing?.metadata?.baseDir) {
           return sendApiError(
             res,
@@ -5238,6 +5279,15 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           return sendApiError(
             res, 400, 'BAD_REQUEST',
             'fromTrustedPicker can only be set via POST /api/import/folder',
+          );
+        }
+        if (
+          'connectedTarget' in patch.metadata
+          && !sameConnectedTarget(patch.metadata.connectedTarget, existingMeta?.connectedTarget)
+        ) {
+          return sendApiError(
+            res, 400, 'BAD_REQUEST',
+            'connectedTarget can only be changed via POST/DELETE /api/projects/:id/target',
           );
         }
         if ('orchestratorWorkspace' in patch.metadata) {
@@ -5333,6 +5383,12 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           patch.metadata = {
             ...patch.metadata,
             exampleBinding: existingMeta.exampleBinding,
+          };
+        }
+        if (existingMeta?.connectedTarget) {
+          patch.metadata = {
+            ...patch.metadata,
+            connectedTarget: existingMeta.connectedTarget,
           };
         }
       }
@@ -5556,7 +5612,16 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         sse.send('file-changed', evt);
       }, { metadata: watchProject?.metadata });
       sub.ready.then(() => sse.send('ready', { projectId: req.params.id })).catch(() => {});
+      const pushPromotionStatus = () => {
+        void emitPromotionStatus(
+          (event, data) => sse.send(event, data),
+          { db, projectId: req.params.id, cwd: PROJECTS_DIR },
+        ).catch(() => {});
+      };
+      pushPromotionStatus();
+      const promotionTimer = setInterval(pushPromotionStatus, PROMOTION_POLL_INTERVAL_MS);
       const cleanup = () => {
+        clearInterval(promotionTimer);
         if (sub) {
           const { unsubscribe } = sub;
           sub = null;

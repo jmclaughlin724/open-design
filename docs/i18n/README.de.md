@@ -547,7 +547,7 @@ Plugin-Registry-Endpunkt: `GET /api/plugins`. Verzeichnisübersicht → [`plugin
 
 | Ebene | Stack |
 |---|---|
-| Frontend | Next.js 16 App Router + React 18 + TypeScript |
+| Frontend | Next.js 16 App Router + React 19.3 + TypeScript |
 | Daemon | Node 24 · Express · SSE-Streaming · `better-sqlite3` |
 | Speicher | Bevor Sie Daemon-Speicherpfade ändern oder dokumentieren, MÜSSEN Sie `AGENTS.md` im Repository-Stamm lesen, Abschnitt **Daemon data directory contract**. Dieses README DARF ihn NICHT wiederholen. |
 | Vorschau | Dateisystemläufe rendern kanonische Projektdateien; BYOK-/Plain-API-Läufe parsen einen vollständigen `<artifact>`-Block in ein Sandbox-`srcdoc`-iframe |

@@ -6,6 +6,16 @@ import { runDaemonCliStartup, startDaemonRuntime } from './daemon-startup.js';
 import { runLiveArtifactsMcpServer } from './mcp-live-artifacts-server.js';
 import { runArtifactsCli } from './artifacts-cli.js';
 import { runResource } from './resource-cli.js';
+import { runTarget } from './target-cli.js';
+import { runTargetContext } from './target-context-cli.js';
+import { runTargetChanges } from './target-changes-cli.js';
+import { runTargetPromote } from './target-promote-cli.js';
+import { runImport } from './claude-design-import-cli.js';
+import { runDesignSystemCheck } from './design-system-check-cli.js';
+import { runDesignSystemShow } from './design-system-show-cli.js';
+import { runDesignSystemNote } from './design-system-note-cli.js';
+import { runProbe } from './render-probe-cli.js';
+import { runContext } from './design-context-cli.js';
 import { runProjectHandoff } from './handoff-cli.js';
 import { runConnectorsToolCli } from './tools-connectors-cli.js';
 import { runDesignSystemsToolCli } from './tools-design-systems-cli.js';
@@ -430,7 +440,67 @@ const SUBCOMMAND_MAP = {
   config: runConfig,
   library: runLibrary,
   figma: runFigma,
+  target: runTargetCommand,
+  import: runImportCommand,
+  'design-system': runDesignSystemCommand,
+  probe: runProbeCommand,
+  context: runContextCommand,
 };
+
+async function runTargetCommand(args) {
+  if (args[0] === 'promote') {
+    const { exitCode } = await runTargetPromote(args.slice(1));
+    if (exitCode !== 0) process.exitCode = exitCode;
+    return;
+  }
+  if (args[0] === 'context') {
+    const { exitCode } = await runTargetContext(args.slice(1));
+    if (exitCode !== 0) process.exitCode = exitCode;
+    return;
+  }
+  if (args[0] === 'changes') {
+    const { exitCode } = await runTargetChanges(args.slice(1));
+    if (exitCode !== 0) process.exitCode = exitCode;
+    return;
+  }
+  const { exitCode } = await runTarget(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+async function runDesignSystemCommand(args) {
+  if (args[0] === 'show') {
+    const { exitCode } = await runDesignSystemShow(args);
+    if (exitCode !== 0) process.exitCode = exitCode;
+    return;
+  }
+  if (args[0] === 'note') {
+    const { exitCode } = await runDesignSystemNote(args);
+    if (exitCode !== 0) process.exitCode = exitCode;
+    return;
+  }
+  const { exitCode } = await runDesignSystemCheck(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+async function runImportCommand(args) {
+  const { exitCode } = await runImport(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+async function runDesignSystemCheckCommand(args) {
+  const { exitCode } = await runDesignSystemCheck(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+async function runProbeCommand(args) {
+  const { exitCode } = await runProbe(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+async function runContextCommand(args) {
+  const { exitCode } = await runContext(args);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
 
 function printStrategyHelp() {
   console.log(`Usage:

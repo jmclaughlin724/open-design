@@ -4,6 +4,7 @@
 // colors, and rounding are preserved. Only generic destinations without brand
 // artwork (Explorer / File Manager) keep a drawn glyph.
 
+import type { ReactElement } from 'react';
 import type { HostEditorId } from '@open-design/contracts';
 
 interface Props {
@@ -46,7 +47,7 @@ function folderLogo(size: number) {
 interface EditorVisual {
   bg: string;
   fg: string;
-  glyph: (size: number) => JSX.Element;
+  glyph: (size: number) => ReactElement;
 }
 
 const EDITORS: Record<string, EditorVisual> = {

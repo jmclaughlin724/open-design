@@ -548,7 +548,7 @@ pnpm guard && pnpm --filter @open-design/plugin-runtime typecheck
 
 | الطبقة | المكدّس |
 |---|---|
-| الواجهة الأمامية | Next.js 16 App Router + React 18 + TypeScript |
+| الواجهة الأمامية | Next.js 16 App Router + React 19.3 + TypeScript |
 | الـ Daemon | Node 24 · Express · بثّ SSE · `better-sqlite3` |
 | التخزين | قبل تغيير أو توثيق مسارات تخزين الـ daemon، يجب قراءة `AGENTS.md` في جذر المستودع، قسم **Daemon data directory contract**. يجب ألا يعيد هذا README صياغته. |
 | المعاينة | تشغيلات filesystem تعرض الملفات الأساسية؛ وتشغيلات BYOK/API تحلل كتلة `<artifact>` كاملة في iframe `srcdoc` معزول |

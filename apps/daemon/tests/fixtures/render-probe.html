@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Render probe fixture</title>
+  </head>
+  <body>
+    <h1 id="probe-heading">Probe ready</h1>
+    <p class="lede">Selector text lives here.</p>
+    <script>
+      document.querySelector('#probe-heading').textContent = 'mutated by script';
+    </script>
+  </body>
+</html>

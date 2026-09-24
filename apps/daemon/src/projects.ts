@@ -35,6 +35,11 @@ import {
   SANDBOX_IMPORTED_PROJECT_UNAVAILABLE_MESSAGE,
 } from './sandbox-mode.js';
 import { isOrchestratorScratchWorkspace } from './workspace-contract.js';
+import {
+  assertResolvedWriteOutsideBoundTarget,
+  assertWriteOutsideBoundTarget,
+  boundLocalPath,
+} from './targets/write-guard.js';
 
 const FORBIDDEN_SEGMENT = /^$|^\.\.?$/;
 const RESERVED_PROJECT_FILE_SEGMENTS = new Set(['.file-versions', '.live-artifacts']);
@@ -857,6 +862,15 @@ export async function writeProjectFile(
   const dir = await ensureProject(projectsRoot, projectId, metadata);
   const safeName = sanitizePath(name);
   const target = await resolveSafeReal(dir, safeName);
+  const boundTarget = boundLocalPath(metadata);
+  if (boundTarget) {
+    try {
+      await assertResolvedWriteOutsideBoundTarget(target, boundTarget);
+    } catch (error) {
+      if (error?.code === 'EBOUNDTARGET') throw error;
+      assertWriteOutsideBoundTarget(target, boundTarget);
+    }
+  }
   body = normalizeArtifactRuntimeImports(safeName, body);
   if (!overwrite) {
     try {

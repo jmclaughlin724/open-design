@@ -30,6 +30,8 @@ import type {
   ChatSseEvent,
   ChatSseStartPayload,
   DaemonAgentPayload,
+  PlanUpdateSsePayload,
+  ToolActivitySsePayload,
   AmrModelsResponse,
   AmrWalletSnapshot,
   ByokChatProviderConfig,
@@ -361,6 +363,16 @@ export interface DaemonStreamHandlers extends StreamHandlers {
   onAgentRetry?: (state: DaemonAgentRetryState) => void;
   /** Codex/agent CLI is reconnecting to its upstream model stream. */
   onAgentReconnect?: (state: DaemonAgentReconnectState) => void;
+  /**
+   * Live tool-kind roll-up. Absent on daemons that do not emit `tool_activity`.
+   * Not persisted.
+   */
+  onToolActivity?: (payload: ToolActivitySsePayload) => void;
+  /**
+   * Live todo snapshot. Absent when the CLI did not emit a structural plan.
+   * Not persisted.
+   */
+  onPlanUpdate?: (payload: PlanUpdateSsePayload) => void;
 }
 
 /**
@@ -2141,6 +2153,16 @@ async function consumeDaemonPhysicalRun({
             continue;
           }
 
+          if (event.event === 'tool_activity') {
+            if (isToolActivityPayload(event.data)) handlers.onToolActivity?.(event.data);
+            continue;
+          }
+
+          if (event.event === 'plan_update') {
+            if (isPlanUpdatePayload(event.data)) handlers.onPlanUpdate?.(event.data);
+            continue;
+          }
+
           if (event.event === 'agent') {
             const translated = translateAgentEvent(event.data);
             if (!translated) continue;
@@ -2525,6 +2547,17 @@ function markErrorRunFailure(
   if (fields.failureAction) target.failureAction = fields.failureAction;
   if (typeof fields.retryable === 'boolean') target.retryable = fields.retryable;
   return err;
+}
+
+function isToolActivityPayload(value: unknown): value is ToolActivitySsePayload {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const counts = (value as { counts?: unknown }).counts;
+  return Boolean(counts) && typeof counts === 'object' && !Array.isArray(counts);
+}
+
+function isPlanUpdatePayload(value: unknown): value is PlanUpdateSsePayload {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  return Array.isArray((value as { todos?: unknown }).todos);
 }
 
 function normalizeToolInput(input: unknown): unknown {

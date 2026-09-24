@@ -284,7 +284,7 @@ node --experimental-strip-types scripts/sync-litellm-models.ts
 为了保持项目聚焦，请不要发以下类型的 PR：
 
 - **Vendor 一个模型运行时。** OD 整个赌注就是「你已有的 CLI 就够了」。我们不带 `pi-ai`、不带 OpenAI key、不带模型加载器。
-- **未经讨论不要把前端重写到别的栈。** Next.js 16 App Router + React 18 + TS 是当前底线。不要随手改成 Astro / Solid / Svelte 或其他框架。
+- **未经讨论不要把前端重写到别的栈。** Next.js 16 App Router + React 19.3 + TS 是当前底线。不要随手改成 Astro / Solid / Svelte 或其他框架。
 - **把 daemon 换成 serverless function。** Daemon 的存在意义就是拥有真实的 `cwd` 和 spawn 真实的 CLI。SPA 部署 Vercel 没问题，daemon 仍然是 daemon。
 - **在隐私契约之外增加 telemetry 或对外数据收集。** 产品分析与经过遮罩的 session replay 需要用户同意；在已配置的构建中，经过脱敏的安全性/可靠性 telemetry 始终启用。任何新事件、字段或目标都必须遵守 [`PRIVACY.md`](../../PRIVACY.md) 规定的同意、最小化与脱敏边界。
 - **打包二进制** 而没有附 license 文件和原作者归属。

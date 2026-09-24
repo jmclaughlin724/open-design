@@ -43,6 +43,8 @@ import {
 } from '@open-design/contracts/runtime/preview-guards';
 
 import {
+  buildCommentAnchorBridge,
+  COMMENT_ANCHOR_BRIDGE_MARKER,
   endOfTag,
   findRealElementRange,
   findRealTagEnd,
@@ -1471,6 +1473,11 @@ function injectBeforeHeadEnd(doc: string, payload: string): string {
     } catch { /* fall through to prepend */ }
   }
   return payload + doc;
+}
+
+function injectCommentAnchorBridge(doc: string): string {
+  if (doc.includes(COMMENT_ANCHOR_BRIDGE_MARKER)) return doc;
+  return injectBeforeBodyEnd(doc, buildCommentAnchorBridge());
 }
 
 function injectBeforeBodyEnd(doc: string, payload: string): string {
@@ -2954,7 +2961,7 @@ html[data-od-comment-mode][data-od-comment-mode-kind="pod"] body * { cursor: cel
 html[data-od-comment-mode] body iframe,
 html[data-od-inspect-mode] body iframe { pointer-events: none !important; }
 </style>`;
-  return injectBeforeBodyEnd(injectBeforeHeadEnd(doc, style), script);
+  return injectCommentAnchorBridge(injectBeforeBodyEnd(injectBeforeHeadEnd(doc, style), script));
 }
 
 // The deck bridge supports three deck conventions found across our skills

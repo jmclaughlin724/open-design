@@ -4382,7 +4382,7 @@ export const hu: Dict = {
   'dsManager.createTitle': 'Új design rendszer létrehozása',
   'dsManager.createBody': 'Tanítsd meg az OpenDesignnak a márkádat, terméked, kódod, eszközeid és design referenciáid.',
   'dsManager.createAction': 'Létrehozás',
-  'dsManager.emptyMine': 'Még nincs design rendszer. Hozz létre egyet valós termékkontextusból, nézd át a vázlatot, majd tedd közzé a jövőbeli projektekhez.',
+  'dsManager.emptyMine': 'Még nincs design rendszer.',
   'dsManager.badgeDefault': 'Alapértelmezett',
   'dsManager.rowMetaUpdated': 'Te · frissítve {date}',
   'dsManager.edit': 'Szerkesztés',

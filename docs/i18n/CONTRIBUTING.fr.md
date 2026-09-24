@@ -399,7 +399,7 @@ Pour garder le projet focalisé, merci de ne pas ouvrir de PR qui :
 - **Vendor un runtime de modèle.** Tout le pari d'OD est "votre CLI existante
   suffit". Nous ne livrons pas `pi-ai`, de clés OpenAI ou de model loaders.
 - **Réécrit le frontend hors de la stack actuelle sans discussion préalable.**
-  Next.js 16 App Router + React 18 + TS est la ligne. Pas de réécriture Astro,
+  Next.js 16 App Router + React 19.3 + TS est la ligne. Pas de réécriture Astro,
   Solid, Svelte ou autre framework sauf si les maintainers veulent explicitement
   cette migration.
 - **Remplace le daemon par une fonction serverless.** Le rôle du daemon est de
